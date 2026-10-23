@@ -1,13 +1,17 @@
 import { ipcMain, shell } from 'electron'
+import { existsSync } from 'node:fs'
+import { basename, resolve, sep } from 'node:path'
+import { createCard, findCard } from '../core/tasks/taskCard'
 import { mapLimit } from '../core/concurrency'
 import { AppError, wrap } from '../core/result'
 import { findMiniprogramRoot } from '../core/launcher/launcherService'
 import { buildReleaseInfo } from '../core/release/releaseInfo'
 import { readScripts } from '../core/runner/packageScripts'
 import { Channels, Events, type FetchAllMap, type StatusMap } from '../shared/ipc'
-import type { OpenerKind, PrefsPatch, Project, ReleaseJob, ReleaseRequest } from '../shared/types'
+import type { OpenerKind, Prefs, PrefsPatch, Project, ReleaseJob, ReleaseRequest, TapdDetail } from '../shared/types'
 import type { HotkeyManager } from './hotkey'
 import type { Services } from './services'
+import type { TapdPoller } from './tapdPoller'
 
 const STATUS_CONCURRENCY = 6
 const FETCH_CONCURRENCY = 4
@@ -15,7 +19,13 @@ const FETCH_CONCURRENCY = 4
 export interface IpcDeps {
   services: Services
   hotkey: HotkeyManager
+  poller: TapdPoller
   send(channel: string, payload?: unknown): void
+}
+
+function publicPrefs(p: Prefs): Prefs {
+  const { tapdTokenEnc: _secret, ...rest } = p
+  return rest
 }
 
 function handle(channel: string, fn: (...args: any[]) => unknown): void {
@@ -27,8 +37,8 @@ async function availableProjects({ registry }: Services): Promise<Project[]> {
   return projects.filter((p) => p.available)
 }
 
-export function registerIpc({ services, hotkey, send }: IpcDeps): void {
-  const { registry, git, runner, launcher, prefs, release } = services
+export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
+  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken } = services
   const repoPath = async (id: string) => (await registry.require(id)).repoPath
 
   handle(Channels.registryList, () => registry.load())
@@ -120,17 +130,52 @@ export function registerIpc({ services, hotkey, send }: IpcDeps): void {
   })
   handle(Channels.releaseList, () => release.list())
 
-  handle(Channels.settingsGet, () => prefs.get())
+  handle(Channels.tapdStatus, () => tapdToken.status())
+  handle(Channels.tapdSetToken, (token: string | null) => {
+    tapdToken.set(token)
+    tapd.reset()
+    return tapdToken.status()
+  })
+  handle(Channels.tapdBoard, (force?: boolean) => poller.refresh({ force: Boolean(force) }))
+  handle(Channels.tapdDetail, async (key: string): Promise<TapdDetail> => {
+    const detail = await tapd.detail(key)
+    const card = await findCard(prefs.get().vaultPath, detail.item.id)
+    return { ...detail, card }
+  })
+  handle(Channels.tapdTransition, async (key: string, to: string) => {
+    await tapd.transition(key, to)
+    return null
+  })
+  handle(Channels.tapdCreateCard, async (key: string, projectId: string) => {
+    const project = await registry.require(projectId)
+    const { item, description } = await tapd.detail(key)
+    return createCard({ vaultPath: prefs.get().vaultPath, project, item, description })
+  })
+  handle(Channels.tapdOpenCard, async (relPath: string) => {
+    const vaultPath = prefs.get().vaultPath
+    const full = resolve(vaultPath, relPath)
+    if (!full.startsWith(resolve(vaultPath) + sep) || !existsSync(full)) {
+      throw new AppError('CARD_NOT_FOUND', `任务卡不存在：${relPath}`)
+    }
+    await shell.openExternal(
+      `obsidian://open?vault=${encodeURIComponent(basename(vaultPath))}&file=${encodeURIComponent(relPath)}`
+    )
+    return null
+  })
+
+  // 加密后的令牌只在主进程使用
+  handle(Channels.settingsGet, () => publicPrefs(prefs.get()))
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
     const prev = prefs.get()
-    if (patch.hotkey && patch.hotkey !== prev.hotkey) hotkey.apply(patch.hotkey)
-    const next = prefs.update(patch)
+    const { tapdTokenEnc: _ignored, ...safePatch } = patch
+    if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
+    const next = prefs.update(safePatch)
     if (next.vaultPath !== prev.vaultPath) {
       registry.watch()
       await registry.load().catch(() => undefined)
       send(Events.registryChanged)
     }
-    return next
+    return publicPrefs(next)
   })
 
   handle(Channels.appOpenExternal, async (url: string) => {

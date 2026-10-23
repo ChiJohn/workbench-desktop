@@ -1,15 +1,91 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
-import type { Prefs, RegistryResult } from '../../../shared/types'
-import { useSavePrefs } from '../queries'
+import type { Prefs, RegistryResult, TapdBoard, TapdStatus } from '../../../shared/types'
+import { api, unwrap } from '../api'
+import { qk, refreshTapdBoard, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
 
 interface Props {
   prefs?: Prefs
   registry?: RegistryResult
   registryError?: Error | null
+  tapdStatus?: TapdStatus
+  board?: TapdBoard
 }
 
-export function Settings({ prefs, registry, registryError }: Props) {
+function TapdSettings({ status, board, disabled }: { status?: TapdStatus; board?: TapdBoard; disabled: string[] }) {
+  const qc = useQueryClient()
+  const save = useSavePrefs()
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const applyToken = async (value: string | null) => {
+    setBusy(true)
+    try {
+      qc.setQueryData(qk.tapdStatus, await unwrap(api.tapd.setToken(value)))
+      setToken('')
+      toast.success(value ? 'TAPD 令牌已保存' : 'TAPD 令牌已清除')
+      if (value) await refreshTapdBoard(qc, true)
+      else qc.removeQueries({ queryKey: qk.tapdBoard })
+    } catch (e) {
+      toast.error(e, '保存令牌失败')
+    }
+    setBusy(false)
+  }
+
+  const toggleWorkspace = (id: string, enabled: boolean) => {
+    const next = enabled ? disabled.filter((d) => d !== id) : [...disabled, id]
+    save.mutate({ tapd: { disabledWorkspaces: next } }, { onSuccess: () => refreshTapdBoard(qc, false) })
+  }
+
+  return (
+    <section className="card form">
+      <h2>TAPD</h2>
+      <p>
+        令牌：{status?.hasToken ? '已配置' : '未配置'}
+        {status?.source && <span className="muted">（{status.source}）</span>}
+      </p>
+      <label>
+        <span>{status?.hasToken ? '替换令牌' : '访问令牌'}</span>
+        <input
+          className="mono"
+          type="password"
+          autoComplete="off"
+          placeholder="TAPD 个人访问令牌"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <small>用系统加密存储，只在主进程使用；清除后不会再从 ~/.cursor/mcp.json 自动导入</small>
+      </label>
+      <div className="button-row">
+        <button className="btn btn-primary" type="button" disabled={busy || !token.trim()} onClick={() => applyToken(token.trim())}>
+          保存令牌
+        </button>
+        {status?.hasToken && (
+          <button className="btn btn-ghost" type="button" disabled={busy} onClick={() => applyToken(null)}>
+            清除
+          </button>
+        )}
+      </div>
+      {board && (
+        <>
+          <h3>参与的项目</h3>
+          <div className="checkbox-list">
+            {board.workspaces.map((w) => (
+              <label key={w.id} className="checkbox">
+                <input type="checkbox" checked={w.enabled} disabled={save.isPending} onChange={(e) => toggleWorkspace(w.id, e.target.checked)} />
+                {w.name}
+              </label>
+            ))}
+          </div>
+          <small className="hint">取消勾选的项目不拉取、不通知</small>
+        </>
+      )}
+    </section>
+  )
+}
+
+export function Settings({ prefs, registry, registryError, tapdStatus, board }: Props) {
   const save = useSavePrefs()
   const [form, setForm] = useState<Prefs | null>(prefs ?? null)
 
@@ -85,6 +161,8 @@ export function Settings({ prefs, registry, registryError }: Props) {
           </button>
         </div>
       </form>
+
+      <TapdSettings status={tapdStatus} board={board} disabled={prefs?.tapd?.disabledWorkspaces ?? []} />
 
       <section className="card">
         <h2>仓库映射</h2>

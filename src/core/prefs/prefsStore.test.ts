@@ -52,6 +52,18 @@ describe('PrefsStore', () => {
     })
   })
 
+  it('merges tapd repo mappings per key and drops empty values', () => {
+    const store = new PrefsStore(file, defaults)
+    store.update({ tapd: { disabledWorkspaces: ['1'], iterationRepos: { it1: 'a', it2: 'b' }, itemRepos: { 'bug:1': 'a' } } })
+    const next = store.update({ tapd: { iterationRepos: { it2: '', it3: 'c' } } })
+    expect(next.tapd).toEqual({
+      disabledWorkspaces: ['1'],
+      iterationRepos: { it1: 'a', it3: 'c' },
+      itemRepos: { 'bug:1': 'a' }
+    })
+    expect(store.update({ tapd: { disabledWorkspaces: [] } }).tapd?.disabledWorkspaces).toEqual([])
+  })
+
   it('persists updates to disk', () => {
     new PrefsStore(file, defaults).update({ wechatDevtoolsCli: 'C:\\cli.bat' })
     expect(JSON.parse(readFileSync(file, 'utf8')).wechatDevtoolsCli).toBe('C:\\cli.bat')

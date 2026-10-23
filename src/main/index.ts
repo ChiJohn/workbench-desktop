@@ -1,9 +1,12 @@
-import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, Notification, shell } from 'electron'
 import { join } from 'node:path'
+import { Events } from '../shared/ipc'
+import type { TapdItem } from '../shared/types'
 import { HotkeyManager } from './hotkey'
 import { createAppIcon } from './icon'
 import { registerIpc } from './ipc'
 import { createServices, ensureWechatCli } from './services'
+import { TapdPoller } from './tapdPoller'
 import { createTray } from './tray'
 
 let win: BrowserWindow | null = null
@@ -64,6 +67,26 @@ function toggleWindow(): void {
   else showWindow()
 }
 
+function notifyNewItems(items: TapdItem[], send: (channel: string, payload?: unknown) => void): void {
+  if (!Notification.isSupported()) return
+  const KIND: Record<TapdItem['kind'], string> = { story: '需求', bug: '缺陷', task: '任务' }
+  const notification =
+    items.length === 1
+      ? new Notification({ title: `TAPD 新${KIND[items[0].kind]}`, body: `${items[0].workspaceName}：${items[0].title}` })
+      : new Notification({
+          title: `TAPD 新分配 ${items.length} 个单子`,
+          body: items
+            .slice(0, 3)
+            .map((i) => `${KIND[i.kind]}：${i.title}`)
+            .join('\n')
+        })
+  notification.on('click', () => {
+    showWindow()
+    send(Events.tapdFocus, items[0].key)
+  })
+  notification.show()
+}
+
 function bootstrap(): void {
   const services = createServices()
   const hotkey = new HotkeyManager(toggleWindow)
@@ -84,7 +107,17 @@ function bootstrap(): void {
   services.runner.on('started', tray.refresh)
   services.runner.on('exit', tray.refresh)
 
-  registerIpc({ services, hotkey, send })
+  services.tapdToken.importFromMcp()
+  const poller = new TapdPoller({
+    service: services.tapd,
+    seen: services.tapdSeen,
+    hasToken: () => Boolean(services.tapdToken.get()),
+    onBoard: (board) => send(Events.tapdUpdated, board),
+    notify: (items) => notifyNewItems(items, send)
+  })
+
+  registerIpc({ services, hotkey, poller, send })
+  poller.start()
 
   services.registry.load().catch(() => undefined)
   services.registry.watch()
@@ -129,6 +162,7 @@ function bootstrap(): void {
   })
 
   app.on('will-quit', () => {
+    poller.stop()
     hotkey.dispose()
     services.registry.unwatch()
     tray.destroy()
@@ -137,6 +171,9 @@ function bootstrap(): void {
 
 // 开发调试时隔离偏好与单实例锁，避免影响日常使用的数据
 if (process.env['WORKBENCH_USER_DATA']) app.setPath('userData', process.env['WORKBENCH_USER_DATA'])
+
+// Windows 通知需要 AppUserModelId，否则不显示或显示为 Electron
+app.setAppUserModelId('com.workbench.desktop')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()

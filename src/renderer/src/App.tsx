@@ -4,9 +4,10 @@ import { Overview } from './components/Overview'
 import { ProjectDetail } from './components/ProjectDetail'
 import { ProjectList } from './components/ProjectList'
 import { Settings } from './components/Settings'
+import { TasksPage } from './components/TasksPage'
 import { Toasts } from './components/Toasts'
 import { Toolbar } from './components/Toolbar'
-import { usePrefs, useRegistry, useStatusAll } from './queries'
+import { usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
 import { useUi } from './stores/ui'
 import { useGlobalEvents } from './useGlobalEvents'
 
@@ -15,12 +16,25 @@ export function App() {
   const view = useUi((s) => s.view)
   const registry = useRegistry()
   const prefs = usePrefs()
+  const tapdStatus = useTapdStatus()
+  const board = useTapdBoard(Boolean(tapdStatus.data?.hasToken))
   const projects = registry.data?.projects ?? []
   const status = useStatusAll(projects.length > 0)
 
   const renderMain = () => {
     if (view.kind === 'settings') {
-      return <Settings prefs={prefs.data} registry={registry.data} registryError={registry.error} />
+      return (
+        <Settings
+          prefs={prefs.data}
+          registry={registry.data}
+          registryError={registry.error}
+          tapdStatus={tapdStatus.data}
+          board={board.data}
+        />
+      )
+    }
+    if (view.kind === 'tasks') {
+      return <TasksPage status={tapdStatus.data} board={board} projects={projects} prefs={prefs.data} />
     }
     if (registry.isLoading) return <div className="page hint">读取仓库映射…</div>
     if (registry.error) return <EmptyState message={registry.error.message} />
@@ -34,7 +48,7 @@ export function App() {
 
   return (
     <div className="app">
-      <Toolbar projects={projects} />
+      <Toolbar projects={projects} taskCount={board.data?.items.length} />
       <ProjectList projects={projects} status={status.data} prefs={prefs.data} />
       <main className="main">{renderMain()}</main>
       <LogPanel projects={projects} />

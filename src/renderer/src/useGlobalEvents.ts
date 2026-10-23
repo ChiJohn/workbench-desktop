@@ -40,6 +40,11 @@ export function useGlobalEvents(): void {
       }),
       api.on.runnerOutput((e) => writeTerminal(e.runId, e.chunk)),
       api.on.runnerExit((e) => runs().markExited(e.runId, e.exitCode)),
+      api.on.tapdUpdated((board) => qc.setQueryData(qk.tapdBoard, board)),
+      api.on.tapdFocus((key) => {
+        useUi.getState().setView({ kind: 'tasks' })
+        useUi.getState().setTaskKey(key)
+      }),
       api.on.releaseChanged((job) => {
         const prev = useReleases.getState().upsert(job)
         const wasRunning = !prev || prev.jobId !== job.jobId || prev.status === 'running'

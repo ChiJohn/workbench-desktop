@@ -40,6 +40,15 @@ const api: WorkbenchApi = {
     cancel: (jobId) => invoke(Channels.releaseCancel, jobId),
     list: () => invoke(Channels.releaseList)
   },
+  tapd: {
+    status: () => invoke(Channels.tapdStatus),
+    setToken: (token) => invoke(Channels.tapdSetToken, token),
+    board: (force) => invoke(Channels.tapdBoard, force),
+    detail: (key) => invoke(Channels.tapdDetail, key),
+    transition: (key, to) => invoke(Channels.tapdTransition, key, to),
+    createCard: (key, projectId) => invoke(Channels.tapdCreateCard, key, projectId),
+    openCard: (relPath) => invoke(Channels.tapdOpenCard, relPath)
+  },
   settings: {
     get: () => invoke(Channels.settingsGet),
     set: (patch) => invoke(Channels.settingsSet, patch)
@@ -52,7 +61,9 @@ const api: WorkbenchApi = {
     runnerOutput: (cb) => subscribe(Events.runnerOutput, cb),
     runnerExit: (cb) => subscribe(Events.runnerExit, cb),
     runnerStarted: (cb) => subscribe(Events.runnerStarted, cb),
-    releaseChanged: (cb) => subscribe(Events.releaseChanged, cb)
+    releaseChanged: (cb) => subscribe(Events.releaseChanged, cb),
+    tapdUpdated: (cb) => subscribe(Events.tapdUpdated, cb),
+    tapdFocus: (cb) => subscribe(Events.tapdFocus, cb)
   }
 }
 

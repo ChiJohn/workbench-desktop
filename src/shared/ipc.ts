@@ -12,7 +12,10 @@ import type {
   RunnerExitEvent,
   RunnerOutputEvent,
   RunSession,
-  ScriptsInfo
+  ScriptsInfo,
+  TapdBoard,
+  TapdDetail,
+  TapdStatus
 } from './types'
 
 export const Channels = {
@@ -36,6 +39,13 @@ export const Channels = {
   releaseStart: 'release.start',
   releaseCancel: 'release.cancel',
   releaseList: 'release.list',
+  tapdStatus: 'tapd.status',
+  tapdSetToken: 'tapd.setToken',
+  tapdBoard: 'tapd.board',
+  tapdDetail: 'tapd.detail',
+  tapdTransition: 'tapd.transition',
+  tapdCreateCard: 'tapd.createCard',
+  tapdOpenCard: 'tapd.openCard',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   appOpenExternal: 'app.openExternal'
@@ -46,7 +56,9 @@ export const Events = {
   runnerOutput: 'runner:output',
   runnerExit: 'runner:exit',
   runnerStarted: 'runner:started',
-  releaseChanged: 'release:changed'
+  releaseChanged: 'release:changed',
+  tapdUpdated: 'tapd:updated',
+  tapdFocus: 'tapd:focus'
 } as const
 
 export type StatusMap = Record<string, Result<RepoStatus>>
@@ -85,6 +97,17 @@ export interface WorkbenchApi {
     cancel(jobId: string): Promise<Result<null>>
     list(): Promise<Result<ReleaseJob[]>>
   }
+  tapd: {
+    status(): Promise<Result<TapdStatus>>
+    setToken(token: string | null): Promise<Result<TapdStatus>>
+    /** force 时清空元数据缓存 */
+    board(force?: boolean): Promise<Result<TapdBoard>>
+    detail(key: string): Promise<Result<TapdDetail>>
+    transition(key: string, to: string): Promise<Result<null>>
+    /** 返回任务卡的 vault 相对路径 */
+    createCard(key: string, projectId: string): Promise<Result<string>>
+    openCard(relPath: string): Promise<Result<null>>
+  }
   settings: {
     get(): Promise<Result<Prefs>>
     set(patch: PrefsPatch): Promise<Result<Prefs>>
@@ -98,5 +121,7 @@ export interface WorkbenchApi {
     runnerExit(cb: (e: RunnerExitEvent) => void): Unsubscribe
     runnerStarted(cb: (s: RunSession) => void): Unsubscribe
     releaseChanged(cb: (job: ReleaseJob) => void): Unsubscribe
+    tapdUpdated(cb: (board: TapdBoard) => void): Unsubscribe
+    tapdFocus(cb: (key: string) => void): Unsubscribe
   }
 }

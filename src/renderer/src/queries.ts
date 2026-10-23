@@ -13,7 +13,42 @@ export const qk = {
   prefs: ['prefs'] as const,
   branches: (id: string) => ['branches', id] as const,
   scripts: (id: string) => ['scripts', id] as const,
-  releaseInfo: (id: string) => ['releaseInfo', id] as const
+  releaseInfo: (id: string) => ['releaseInfo', id] as const,
+  tapdStatus: ['tapdStatus'] as const,
+  tapdBoard: ['tapdBoard'] as const,
+  tapdDetail: (key: string) => ['tapdDetail', key] as const
+}
+
+export function useTapdStatus() {
+  return useQuery({ queryKey: qk.tapdStatus, queryFn: () => unwrap(api.tapd.status()) })
+}
+
+export function useTapdBoard(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.tapdBoard,
+    queryFn: () => unwrap(api.tapd.board(false)),
+    enabled,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: false
+  })
+}
+
+export async function refreshTapdBoard(qc: QueryClient, force: boolean): Promise<void> {
+  try {
+    qc.setQueryData(qk.tapdBoard, await unwrap(api.tapd.board(force)))
+  } catch (e) {
+    toast.error(e, '刷新 TAPD 失败')
+  }
+}
+
+export function useTapdDetail(key: string | null) {
+  return useQuery({
+    queryKey: qk.tapdDetail(key ?? ''),
+    queryFn: () => unwrap(api.tapd.detail(key as string)),
+    enabled: Boolean(key),
+    retry: false
+  })
 }
 
 export function useReleaseInfo(id: string) {

@@ -3,7 +3,7 @@ import type { Project } from '../../../shared/types'
 import { qk, useFetchAll } from '../queries'
 import { useUi } from '../stores/ui'
 
-export function Toolbar({ projects }: { projects: Project[] }) {
+export function Toolbar({ projects, taskCount }: { projects: Project[]; taskCount?: number }) {
   const qc = useQueryClient()
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
@@ -26,6 +26,13 @@ export function Toolbar({ projects }: { projects: Project[] }) {
           onClick={() => setView({ kind: 'overview' })}
         >
           总览
+        </button>
+        <button
+          className={view.kind === 'tasks' ? 'btn btn-ghost active' : 'btn btn-ghost'}
+          onClick={() => setView({ kind: 'tasks' })}
+        >
+          任务
+          {taskCount !== undefined && taskCount > 0 && <span className="count-badge">{taskCount}</span>}
         </button>
         <button className="btn" disabled={fetchAll.isPending} onClick={() => fetchAll.mutate()}>
           {fetchAll.isPending ? '正在 fetch…' : '全部 fetch'}

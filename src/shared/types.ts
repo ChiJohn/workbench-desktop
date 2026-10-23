@@ -110,7 +110,76 @@ export interface Prefs {
   wechatDevtoolsCli?: string
   /** 开发者工具「安全设置」中的 CLI 访问令牌 */
   wechatDevtoolsToken?: string
+  /** safeStorage 加密后的 TAPD 个人令牌（base64），不下发给渲染层 */
+  tapdTokenEnc?: string
+  tapd?: TapdPrefs
   repos: Record<string, RepoPrefs>
+}
+
+export interface TapdPrefs {
+  disabledWorkspaces?: string[]
+  /** 迭代 id → 仓库项目 id */
+  iterationRepos?: Record<string, string>
+  /** 无迭代的单子 key → 仓库项目 id */
+  itemRepos?: Record<string, string>
+}
+
+export type TapdKind = 'story' | 'bug' | 'task'
+
+export interface TapdItem {
+  /** `${kind}:${id}` */
+  key: string
+  kind: TapdKind
+  id: string
+  workspaceId: string
+  workspaceName: string
+  title: string
+  status: string
+  statusLabel: string
+  iterationId: string | null
+  iterationName: string | null
+  owners: string[]
+  priority: string | null
+  modified: string
+  url: string
+  /** 任务所属需求 */
+  storyId?: string
+  workitemTypeId?: string
+}
+
+export interface TapdWorkspace {
+  id: string
+  name: string
+  enabled: boolean
+}
+
+export interface TapdBoard {
+  user: string
+  items: TapdItem[]
+  workspaces: TapdWorkspace[]
+  errors: { workspaceId: string; workspaceName: string; message: string }[]
+  fetchedAt: number
+}
+
+export interface TapdTransition {
+  to: string
+  label: string
+  /** 需要在 TAPD 中填写的必填字段；非空时不能在工作台流转 */
+  blockedBy: string[]
+}
+
+export interface TapdDetail {
+  item: TapdItem
+  description: string
+  transitions: TapdTransition[]
+  /** 已生成的任务卡（vault 相对路径） */
+  card: string | null
+}
+
+export interface TapdStatus {
+  hasToken: boolean
+  /** 令牌来源说明，如「从 ~/.cursor/mcp.json 导入」 */
+  source?: string
 }
 
 export type ReleaseAction = 'preview' | 'upload'

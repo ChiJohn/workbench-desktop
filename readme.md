@@ -1,6 +1,6 @@
 # workbench-desktop
 
-个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `Projects/仓库映射.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行、常用 git 操作，以及小程序构建、预览与上传体验版。
+个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `Projects/仓库映射.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行、常用 git 操作，小程序构建、预览与上传体验版，以及 TAPD 任务中心。
 
 ## 使用
 
@@ -30,6 +30,17 @@ node node_modules/electron/install.js
 - 上传版本号默认取上次上传 +1；描述默认 `分支 短hash 提交信息`
 - 构建后会复核 `project.config.json` 中的 appid（Taro 以 `dist/` 中的为准），与确认时不一致会停止上传
 - CLI 出错时退出码可能仍为 0，因此以输出中的 `[error]` / `×` 判断失败
+
+### 任务中心
+
+工具栏「任务」页汇总 TAPD 上分配给我的未完成需求、缺陷和任务，按项目和迭代分组。
+
+- 令牌首次启动时从 `~/.cursor/mcp.json`（`mcp-server-tapd` 的 `TAPD_ACCESS_TOKEN`）导入，也可在「设置 → TAPD」替换或清除；以系统加密（safeStorage）保存在 prefs 中，界面拿不到明文
+- 默认包含参与的全部项目（排除组织和示例空间），可在设置中取消勾选
+- 迭代分组标题处手动选择关联仓库，未规划迭代的单子在详情面板中单独选择；关联后可「去仓库」和「生成任务卡」
+- 任务卡写到 vault 中对应项目目录 `Projects/<项目>/task-YYYYMMDD-标题.md`，同一单子已有卡片时直接打开
+- 状态流转只列工作流允许的下一状态，有必填字段的流转需要到 TAPD 中操作；提交前二次确认
+- 每 15 分钟后台刷新一次，有新分配的单子时发系统通知，点击通知跳到该单子
 
 ## 开发
 
