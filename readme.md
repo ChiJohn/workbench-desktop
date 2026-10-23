@@ -1,6 +1,6 @@
 # workbench-desktop
 
-个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `Projects/仓库映射.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行和常用 git 操作。
+个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `Projects/仓库映射.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行、常用 git 操作，以及小程序构建、预览与上传体验版。
 
 ## 使用
 
@@ -20,6 +20,16 @@ node node_modules/electron/install.js
 - 全局快捷键默认 `Ctrl+Alt+W` 唤起 / 隐藏窗口，可在「设置」修改
 - 关闭窗口会隐藏到托盘，正在运行的脚本不受影响；从托盘「退出」会先确认并停止所有脚本
 - 偏好保存在 `%APPDATA%/workbench-desktop/prefs.json`；调试时可用环境变量 `WORKBENCH_USER_DATA` 指向其他目录
+
+### 小程序发版
+
+小程序项目的详情页有「小程序发版」卡片：选择构建环境（自动识别 `build:weapp*` 脚本，原生项目为「构建 npm」）后点「预览」或「上传体验版」，流水线为 构建 → 预览 / 上传，日志进入下方日志面板。
+
+- 调用本机微信开发者工具 CLI（`cli.bat`），启动时自动探测安装位置，也可在「设置」中指定
+- 需要在开发者工具中登录，并在「设置 → 安全设置」开启服务端口
+- 上传版本号默认取上次上传 +1；描述默认 `分支 短hash 提交信息`
+- 构建后会复核 `project.config.json` 中的 appid（Taro 以 `dist/` 中的为准），与确认时不一致会停止上传
+- CLI 出错时退出码可能仍为 0，因此以输出中的 `[error]` / `×` 判断失败
 
 ## 开发
 
