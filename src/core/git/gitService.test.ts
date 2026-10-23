@@ -65,6 +65,27 @@ describe('GitService', () => {
     expect((await git.status(repo)).branch).toBe('main')
   })
 
+  it('refuses to switch branches with uncommitted tracked changes', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'init')
+    await git.createBranch(repo, 'other')
+    await git.checkout(repo, 'main')
+    writeFileSync(join(repo, 'a.txt'), 'dirty')
+    await expect(git.checkout(repo, 'other')).rejects.toMatchObject({ code: 'DIRTY_WORKTREE' })
+    expect((await git.status(repo)).branch).toBe('main')
+  })
+
+  it('allows switching when only untracked files exist', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'init')
+    await git.createBranch(repo, 'other')
+    writeFileSync(join(repo, 'new.txt'), 'untracked')
+    await git.checkout(repo, 'main')
+    expect((await git.status(repo)).branch).toBe('main')
+  })
+
   it('rejects branch names that look like options', async () => {
     const repo = join(root, 'repo')
     initRepo(repo)

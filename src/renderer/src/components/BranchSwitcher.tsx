@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBranches, useGitAction } from '../queries'
 
-export function BranchSwitcher({ projectId, branch }: { projectId: string; branch: string | null }) {
+interface Props {
+  projectId: string
+  projectName: string
+  branch: string | null
+}
+
+export function BranchSwitcher({ projectId, projectName, branch }: Props) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -22,7 +28,9 @@ export function BranchSwitcher({ projectId, branch }: { projectId: string; branc
   const choose = (name: string) => {
     setOpen(false)
     setFilter('')
-    if (name !== branch) action.mutate({ kind: 'checkout', id: projectId, branch: name })
+    if (name === branch) return
+    if (!window.confirm(`确认切换分支？\n\n项目：${projectName}\n${branch ?? '(detached)'}  →  ${name}`)) return
+    action.mutate({ kind: 'checkout', id: projectId, branch: name })
   }
 
   return (

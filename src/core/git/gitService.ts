@@ -47,8 +47,18 @@ export class GitService {
     return parseBranchList(out)
   }
 
+  /** 有未提交的已跟踪改动时拒绝切换：git switch 会把改动静默带到目标分支 */
   async checkout(repoPath: string, branch: string): Promise<void> {
     assertBranchName(branch)
+    const dirty = await this.run(repoPath, ['status', '--porcelain', '--untracked-files=no'], QUICK_TIMEOUT)
+    if (dirty.trim()) {
+      const files = dirty.trim().split(/\r?\n/)
+      throw new AppError(
+        'DIRTY_WORKTREE',
+        `有 ${files.length} 个未提交的改动，请先提交或贮藏后再切换分支`,
+        dirty.trim()
+      )
+    }
     await this.run(repoPath, ['switch', branch.trim()], SWITCH_TIMEOUT)
   }
 

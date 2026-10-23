@@ -59,7 +59,7 @@ export function ProjectDetail({ project, status, prefs }: Props) {
             <div className="status-line">
               {r?.ok ? (
                 <>
-                  <BranchSwitcher projectId={project.id} branch={r.data.branch} />
+                  <BranchSwitcher projectId={project.id} projectName={project.name} branch={r.data.branch} />
                   {r.data.upstream ? (
                     <span className="mono" title={r.data.upstream}>
                       ↑{r.data.ahead} <span className={r.data.behind ? 'error-text' : ''}>↓{r.data.behind}</span>
@@ -117,7 +117,12 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               <button
                 className="btn"
                 disabled={action.isPending}
-                onClick={() => action.mutate({ kind: 'pull', id: project.id })}
+                onClick={() => {
+                  const branch = r?.ok ? (r.data.branch ?? '(detached)') : '当前分支'
+                  if (window.confirm(`确认 pull？\n\n项目：${project.name}\n分支：${branch}（仅快进合并）`)) {
+                    action.mutate({ kind: 'pull', id: project.id })
+                  }
+                }}
               >
                 pull
               </button>
