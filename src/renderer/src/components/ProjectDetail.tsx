@@ -4,6 +4,7 @@ import type { OpenerKind, Prefs, Project } from '../../../shared/types'
 import { relativeTime, TYPE_LABELS } from '../format'
 import { openWith, useGitAction, useSavePrefs } from '../queries'
 import { BranchSwitcher } from './BranchSwitcher'
+import { ReleaseCard } from './ReleaseCard'
 import { ScriptList } from './ScriptList'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
@@ -176,6 +177,13 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               </label>
             )}
           </section>
+
+          {project.type === 'miniapp' && (
+            <section className="card">
+              <h2>小程序发版</h2>
+              <ReleaseCard key={project.id} project={project} prefs={prefs} />
+            </section>
+          )}
 
           <section className="card">
             <h2>脚本</h2>

@@ -5,6 +5,8 @@ import { GitService } from '../core/git/gitService'
 import { LauncherService } from '../core/launcher/launcherService'
 import { PrefsStore } from '../core/prefs/prefsStore'
 import { RegistryService } from '../core/registry/registryService'
+import { detectWechatCli, WECHAT_CLI_CANDIDATES } from '../core/release/devtoolsPath'
+import { ReleaseService } from '../core/release/releaseService'
 import { RunnerService } from '../core/runner/runnerService'
 import type { Prefs } from '../shared/types'
 
@@ -14,11 +16,8 @@ export interface Services {
   git: GitService
   runner: RunnerService
   launcher: LauncherService
+  release: ReleaseService
 }
-
-const WECHAT_CLI_CANDIDATES = ['C:', 'D:'].flatMap((drive) =>
-  ['Program Files (x86)', 'Program Files'].map((dir) => `${drive}\\${dir}\\Tencent\\微信web开发者工具\\cli.bat`)
-)
 
 function defaultPrefs(): Prefs {
   return {
@@ -32,11 +31,20 @@ function defaultPrefs(): Prefs {
 
 export function createServices(): Services {
   const prefs = new PrefsStore(join(app.getPath('userData'), 'prefs.json'), defaultPrefs())
+  const runner = new RunnerService()
   return {
     prefs,
     registry: new RegistryService(() => prefs.get().vaultPath),
     git: new GitService(),
-    runner: new RunnerService(),
-    launcher: new LauncherService()
+    runner,
+    launcher: new LauncherService(),
+    release: new ReleaseService(runner)
   }
+}
+
+/** 候选路径都不存在时再查注册表（安装目录可自定义） */
+export async function ensureWechatCli({ prefs }: Services): Promise<void> {
+  if (prefs.get().wechatDevtoolsCli) return
+  const found = await detectWechatCli()
+  if (found && !prefs.get().wechatDevtoolsCli) prefs.update({ wechatDevtoolsCli: found })
 }

@@ -4,6 +4,9 @@ import type {
   Prefs,
   PrefsPatch,
   RegistryResult,
+  ReleaseInfo,
+  ReleaseJob,
+  ReleaseRequest,
   RepoStatus,
   Result,
   RunnerExitEvent,
@@ -29,6 +32,10 @@ export const Channels = {
   runnerBuffer: 'runner.buffer',
   runnerDispose: 'runner.dispose',
   launcherOpen: 'launcher.open',
+  releaseInfo: 'release.info',
+  releaseStart: 'release.start',
+  releaseCancel: 'release.cancel',
+  releaseList: 'release.list',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   appOpenExternal: 'app.openExternal'
@@ -38,7 +45,8 @@ export const Events = {
   registryChanged: 'registry:changed',
   runnerOutput: 'runner:output',
   runnerExit: 'runner:exit',
-  runnerStarted: 'runner:started'
+  runnerStarted: 'runner:started',
+  releaseChanged: 'release:changed'
 } as const
 
 export type StatusMap = Record<string, Result<RepoStatus>>
@@ -71,6 +79,12 @@ export interface WorkbenchApi {
   launcher: {
     open(projectId: string, opener: OpenerKind): Promise<Result<null>>
   }
+  release: {
+    info(projectId: string): Promise<Result<ReleaseInfo>>
+    start(req: ReleaseRequest): Promise<Result<ReleaseJob>>
+    cancel(jobId: string): Promise<Result<null>>
+    list(): Promise<Result<ReleaseJob[]>>
+  }
   settings: {
     get(): Promise<Result<Prefs>>
     set(patch: PrefsPatch): Promise<Result<Prefs>>
@@ -83,5 +97,6 @@ export interface WorkbenchApi {
     runnerOutput(cb: (e: RunnerOutputEvent) => void): Unsubscribe
     runnerExit(cb: (e: RunnerExitEvent) => void): Unsubscribe
     runnerStarted(cb: (s: RunSession) => void): Unsubscribe
+    releaseChanged(cb: (job: ReleaseJob) => void): Unsubscribe
   }
 }

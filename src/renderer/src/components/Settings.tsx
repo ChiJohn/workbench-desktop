@@ -28,7 +28,8 @@ export function Settings({ prefs, registry, registryError }: Props) {
         vaultPath: form.vaultPath.trim(),
         hotkey: form.hotkey.trim(),
         terminal: form.terminal,
-        wechatDevtoolsCli: form.wechatDevtoolsCli?.trim() || undefined
+        wechatDevtoolsCli: form.wechatDevtoolsCli?.trim() || undefined,
+        wechatDevtoolsToken: form.wechatDevtoolsToken?.trim() || undefined
       },
       { onSuccess: () => toast.success('设置已保存') }
     )
@@ -61,10 +62,22 @@ export function Settings({ prefs, registry, registryError }: Props) {
           <span>微信开发者工具 cli.bat</span>
           <input
             className="mono"
-            placeholder="例如 C:\Program Files (x86)\Tencent\微信web开发者工具\cli.bat"
+            placeholder="例如 D:\Program Files\微信web开发者工具\cli.bat"
             value={form.wechatDevtoolsCli ?? ''}
             onChange={(e) => set('wechatDevtoolsCli', e.target.value)}
           />
+          <small>预览 / 上传前需要在开发者工具「设置 → 安全设置」中开启服务端口，并保持登录</small>
+        </label>
+        <label>
+          <span>开发者工具 CLI 令牌（可选）</span>
+          <input
+            className="mono"
+            type="password"
+            autoComplete="off"
+            value={form.wechatDevtoolsToken ?? ''}
+            onChange={(e) => set('wechatDevtoolsToken', e.target.value)}
+          />
+          <small>安全设置中开启了 CLI 访问令牌时填写，通过环境变量传给 cli.bat</small>
         </label>
         <div className="button-row">
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>

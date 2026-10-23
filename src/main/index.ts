@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { HotkeyManager } from './hotkey'
 import { createAppIcon } from './icon'
 import { registerIpc } from './ipc'
-import { createServices } from './services'
+import { createServices, ensureWechatCli } from './services'
 import { createTray } from './tray'
 
 let win: BrowserWindow | null = null
@@ -88,6 +88,7 @@ function bootstrap(): void {
 
   services.registry.load().catch(() => undefined)
   services.registry.watch()
+  void ensureWechatCli(services)
 
   Menu.setApplicationMenu(null)
   win = createWindow()
@@ -120,6 +121,7 @@ function bootstrap(): void {
         detail: '退出会停止所有正在运行的脚本。'
       })
       if (response !== 0) return
+      await services.release.cancelAll()
       await services.runner.stopAll()
     }
     quitting = true

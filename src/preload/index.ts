@@ -34,6 +34,12 @@ const api: WorkbenchApi = {
   launcher: {
     open: (id, opener) => invoke(Channels.launcherOpen, id, opener)
   },
+  release: {
+    info: (id) => invoke(Channels.releaseInfo, id),
+    start: (req) => invoke(Channels.releaseStart, req),
+    cancel: (jobId) => invoke(Channels.releaseCancel, jobId),
+    list: () => invoke(Channels.releaseList)
+  },
   settings: {
     get: () => invoke(Channels.settingsGet),
     set: (patch) => invoke(Channels.settingsSet, patch)
@@ -45,7 +51,8 @@ const api: WorkbenchApi = {
     registryChanged: (cb) => subscribe(Events.registryChanged, cb),
     runnerOutput: (cb) => subscribe(Events.runnerOutput, cb),
     runnerExit: (cb) => subscribe(Events.runnerExit, cb),
-    runnerStarted: (cb) => subscribe(Events.runnerStarted, cb)
+    runnerStarted: (cb) => subscribe(Events.runnerStarted, cb),
+    releaseChanged: (cb) => subscribe(Events.releaseChanged, cb)
   }
 }
 

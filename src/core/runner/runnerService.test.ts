@@ -96,6 +96,29 @@ describe('RunnerService', () => {
     })
   })
 
+  it('runs an arbitrary command with a label and extra env', async () => {
+    const exits: RunnerExitEvent[] = []
+    runner.on('exit', (e: RunnerExitEvent) => exits.push(e))
+    writeFileSync(join(dir, 'env.js'), 'console.log("value=" + process.env.WB_TEST); process.exit(4)')
+    const session = await runner.startCommand({
+      projectId: 'p',
+      label: '预览',
+      command: 'node env.js',
+      cwd: dir,
+      env: { WB_TEST: 'hello' }
+    })
+    expect(session).toMatchObject({ projectId: 'p', script: '预览', status: 'running' })
+    await waitFor(() => exits.length === 1)
+    expect(exits[0].exitCode).toBe(4)
+    expect(runner.buffer(session.runId)).toContain('value=hello')
+  })
+
+  it('rejects an empty command', async () => {
+    await expect(
+      runner.startCommand({ projectId: 'p', label: 'x', command: '  ', cwd: dir })
+    ).rejects.toMatchObject({ code: 'INVALID_COMMAND' })
+  })
+
   it('disposes exited sessions but not running ones', async () => {
     const exits: RunnerExitEvent[] = []
     runner.on('exit', (e: RunnerExitEvent) => exits.push(e))

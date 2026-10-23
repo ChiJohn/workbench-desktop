@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { StatusMap } from '../../shared/ipc'
-import type { OpenerKind, PrefsPatch, Project } from '../../shared/types'
+import type { OpenerKind, PrefsPatch, Project, ReleaseRequest } from '../../shared/types'
 import { api, unwrap } from './api'
+import { useReleases } from './stores/releases'
 import { useRuns } from './stores/runs'
 import { toast } from './stores/toast'
 import { useUi } from './stores/ui'
@@ -11,7 +12,30 @@ export const qk = {
   status: ['status'] as const,
   prefs: ['prefs'] as const,
   branches: (id: string) => ['branches', id] as const,
-  scripts: (id: string) => ['scripts', id] as const
+  scripts: (id: string) => ['scripts', id] as const,
+  releaseInfo: (id: string) => ['releaseInfo', id] as const
+}
+
+export function useReleaseInfo(id: string) {
+  return useQuery({ queryKey: qk.releaseInfo(id), queryFn: () => unwrap(api.release.info(id)) })
+}
+
+export async function startRelease(req: ReleaseRequest): Promise<boolean> {
+  try {
+    useReleases.getState().upsert(await unwrap(api.release.start(req)))
+    return true
+  } catch (e) {
+    toast.error(e, req.action === 'preview' ? '预览失败' : '上传失败')
+    return false
+  }
+}
+
+export async function cancelRelease(jobId: string): Promise<void> {
+  try {
+    await unwrap(api.release.cancel(jobId))
+  } catch (e) {
+    toast.error(e, '取消失败')
+  }
 }
 
 export function useRegistry() {

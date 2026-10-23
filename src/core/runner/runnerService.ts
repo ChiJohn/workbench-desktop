@@ -16,6 +16,15 @@ export interface StartInput {
   script: string
 }
 
+export interface CommandInput {
+  projectId: string
+  /** 日志标签上的显示名，存放在 RunSession.script */
+  label: string
+  command: string
+  cwd: string
+  env?: Record<string, string>
+}
+
 export interface RunnerOptions {
   maxLines?: number
   flushMs?: number
@@ -57,18 +66,33 @@ export class RunnerService extends EventEmitter {
     const { pm, scripts } = await readScripts(repoPath)
     if (!(script in scripts)) throw new AppError('SCRIPT_NOT_FOUND', `package.json 中没有脚本：${script}`)
 
-    const child = spawn(buildRunCommand(pm, script), {
-      cwd: repoPath,
+    return this.spawnSession(projectId, script, buildRunCommand(pm, script), repoPath)
+  }
+
+  async startCommand({ projectId, label, command, cwd, env }: CommandInput): Promise<RunSession> {
+    if (!command.trim()) throw new AppError('INVALID_COMMAND', '命令为空')
+    return this.spawnSession(projectId, label, command, cwd, env)
+  }
+
+  private spawnSession(
+    projectId: string,
+    label: string,
+    command: string,
+    cwd: string,
+    env: Record<string, string> = {}
+  ): RunSession {
+    const child = spawn(command, {
+      cwd,
       shell: true,
       windowsHide: true,
       detached: process.platform !== 'win32',
-      env: { ...process.env, FORCE_COLOR: '1' }
+      env: { ...process.env, FORCE_COLOR: '1', ...env }
     })
 
     const session: RunSession = {
       runId: randomUUID(),
       projectId,
-      script,
+      script: label,
       pid: child.pid ?? -1,
       status: 'running',
       startedAt: Date.now()
