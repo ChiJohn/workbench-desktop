@@ -1,16 +1,27 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, watch, type FSWatcher } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { Project, RegistryResult } from '../../shared/types'
 import { AppError } from '../result'
 import { parseRepoMap } from './parseRepoMap'
 
 const MAP_FILE = '仓库映射.md'
 
+/** 映射里的路径可能是 monorepo 中的子应用，需要向上查找 .git */
+function isInsideGitRepo(path: string): boolean {
+  let dir = resolve(path)
+  for (;;) {
+    if (existsSync(join(dir, '.git'))) return true
+    const parent = dirname(dir)
+    if (parent === dir) return false
+    dir = parent
+  }
+}
+
 function checkAvailability(repoPath: string): Pick<Project, 'available' | 'unavailableReason'> {
   if (!existsSync(repoPath)) return { available: false, unavailableReason: '路径不存在' }
-  if (!existsSync(join(repoPath, '.git'))) return { available: false, unavailableReason: '不是 git 仓库' }
+  if (!isInsideGitRepo(repoPath)) return { available: false, unavailableReason: '不在 git 仓库中' }
   return { available: true }
 }
 

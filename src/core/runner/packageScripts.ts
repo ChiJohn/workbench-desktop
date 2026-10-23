@@ -19,7 +19,7 @@ export async function readScripts(repoPath: string): Promise<ScriptsInfo> {
     return { pm, scripts: {} }
   }
   try {
-    const pkg = JSON.parse(raw) as { scripts?: Record<string, string> }
+    const pkg = JSON.parse(raw.replace(/^\uFEFF/, '')) as { scripts?: Record<string, string> }
     return { pm, scripts: pkg.scripts ?? {} }
   } catch (e) {
     throw new AppError('PACKAGE_JSON_INVALID', 'package.json 不是合法的 JSON', String(e))

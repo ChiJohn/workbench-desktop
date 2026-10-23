@@ -38,6 +38,11 @@ describe('readScripts', () => {
     expect(await readScripts(dir)).toEqual({ pm: 'pnpm', scripts: { dev: 'vite', 'build:weapp': 'taro build' } })
   })
 
+  it('tolerates a UTF-8 BOM', async () => {
+    writeFileSync(join(dir, 'package.json'), '\uFEFF{"scripts":{"dev":"vite"}}')
+    expect((await readScripts(dir)).scripts).toEqual({ dev: 'vite' })
+  })
+
   it('throws PACKAGE_JSON_INVALID for malformed json', async () => {
     writeFileSync(join(dir, 'package.json'), '{ nope')
     await expect(readScripts(dir)).rejects.toMatchObject({ code: 'PACKAGE_JSON_INVALID' })

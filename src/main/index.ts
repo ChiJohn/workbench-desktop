@@ -133,6 +133,9 @@ function bootstrap(): void {
   })
 }
 
+// 开发调试时隔离偏好与单实例锁，避免影响日常使用的数据
+if (process.env['WORKBENCH_USER_DATA']) app.setPath('userData', process.env['WORKBENCH_USER_DATA'])
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {

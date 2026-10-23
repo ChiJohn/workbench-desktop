@@ -44,9 +44,16 @@ describe('RegistryService', () => {
     expect(sourcePath).toBe(join(vault, 'Projects', '仓库映射.md'))
     expect(projects.map((p) => [p.name, p.available, p.unavailableReason])).toEqual([
       ['Good', true, undefined],
-      ['Plain', false, '不是 git 仓库'],
+      ['Plain', false, '不在 git 仓库中'],
       ['Gone', false, '路径不存在']
     ])
+  })
+
+  it('treats a sub directory of a git repo (monorepo app) as available', async () => {
+    mkdirSync(join(repos, 'good', 'apps', 'mini'), { recursive: true })
+    writeMap([`| [[Projects/Mini/主页]] | \`${join(repos, 'good', 'apps', 'mini')}\` | 小程序应用 | |`])
+    const { projects } = await service.load()
+    expect(projects[0]).toMatchObject({ available: true })
   })
 
   it('require() finds projects by id and rejects unknown or unavailable ones', async () => {
