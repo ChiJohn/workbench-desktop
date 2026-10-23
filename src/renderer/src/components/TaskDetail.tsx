@@ -2,9 +2,10 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { Prefs, Project, TapdBoard, TapdItem, TapdTransition } from '../../../shared/types'
 import { api, unwrap } from '../api'
-import { qk, refreshTapdBoard, useSavePrefs, useTapdDetail } from '../queries'
+import { qk, refreshTapdBoard, useMulticaByTapd, useMulticaOverview, useSavePrefs, useTapdDetail } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
+import { DispatchDialog } from './DispatchDialog'
 import { KIND_LABELS, RepoSelect } from './TasksPage'
 
 interface Props {
@@ -16,6 +17,37 @@ interface Props {
 
 function linkedRepo(item: TapdItem, prefs?: Prefs): string | undefined {
   return item.iterationId ? prefs?.tapd?.iterationRepos?.[item.iterationId] : prefs?.tapd?.itemRepos?.[item.key]
+}
+
+function DispatchButton({ item, repoId, prefs }: { item: TapdItem; repoId: string | undefined; prefs?: Prefs }) {
+  const existing = useMulticaByTapd(item.key)
+  const overview = useMulticaOverview()
+  const openIssue = useUi((s) => s.openIssue)
+  const [open, setOpen] = useState(false)
+
+  if (existing.data) {
+    return (
+      <button className="btn" onClick={() => openIssue(existing.data!.id)}>
+        已派单 {existing.data.identifier}
+      </button>
+    )
+  }
+  const error = existing.error ?? overview.error
+  return (
+    <>
+      <button
+        className="btn"
+        disabled={existing.isPending || !overview.data}
+        title={error ? `multica 不可用：${error.message}` : undefined}
+        onClick={() => setOpen(true)}
+      >
+        派给智能体
+      </button>
+      {open && overview.data && (
+        <DispatchDialog item={item} repoId={repoId} overview={overview.data} prefs={prefs} onClose={() => setOpen(false)} />
+      )}
+    </>
+  )
 }
 
 export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
@@ -144,6 +176,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
             生成任务卡
           </button>
         )}
+        <DispatchButton item={item} repoId={repoId} prefs={prefs} />
       </div>
 
       {transitions.length > 0 && (

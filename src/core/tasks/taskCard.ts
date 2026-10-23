@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, open, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { TapdItem, TapdKind } from '../../shared/types'
 
@@ -30,33 +30,40 @@ export function cardFileName(title: string, now: Date, suffix = ''): string {
   return `task-${dateStamp(now)}-${safe || '未命名'}${suffix}.md`
 }
 
-export function renderCard(input: {
-  item: TapdItem
-  description: string
+interface CardContent {
+  title: string
   folderName: string
   repoPath: string
+  type: string
+  status: string
+  source: string
+  tapdId: string | null
+  multicaId: string | null
+  description: string
+  log: string[]
+  result: string
   now: Date
-}): string {
-  const { item, description, folderName, repoPath, now } = input
-  const ts = dateTime(now)
+}
+
+function renderContent(c: CardContent): string {
+  const ts = dateTime(c.now)
   return `---
-title: ${yamlString(item.title)}
-project: ${folderName}
-repo: ${repoPath}
-type: ${TYPE_BY_KIND[item.kind]}
+title: ${yamlString(c.title)}
+project: ${c.folderName}
+repo: ${c.repoPath}
+type: ${c.type}
 priority: P2
-status: todo
-source: ${item.url}
-tapd_id: '${item.id}'
-created: ${ts}
+status: ${c.status}
+source: ${c.source}
+${c.tapdId ? `tapd_id: '${c.tapdId}'\n` : ''}${c.multicaId ? `multica_id: '${c.multicaId}'\n` : ''}created: ${ts}
 updated: ${ts}
 ---
 
-# ${item.title}
+# ${c.title}
 
 ## 描述
 
-${description || '（TAPD 正文为空）'}
+${c.description}
 
 ## 概况
 
@@ -72,12 +79,130 @@ ${description || '（TAPD 正文为空）'}
 
 ## 执行记录
 
-- ${ts}：从 TAPD 生成。
+${c.log.map((l) => `- ${l}`).join('\n')}
 
 ## 结果
 
-待填写。
+${c.result}
 `
+}
+
+export function renderCard(input: {
+  item: TapdItem
+  description: string
+  folderName: string
+  repoPath: string
+  now: Date
+}): string {
+  const { item, now } = input
+  return renderContent({
+    title: item.title,
+    folderName: input.folderName,
+    repoPath: input.repoPath,
+    type: TYPE_BY_KIND[item.kind],
+    status: 'todo',
+    source: item.url,
+    tapdId: item.id,
+    multicaId: null,
+    description: input.description || '（TAPD 正文为空）',
+    log: [`${dateTime(now)}：从 TAPD 生成。`],
+    result: '待填写。',
+    now
+  })
+}
+
+const PLACEHOLDER = '待填写。'
+
+/** 在首个 frontmatter 块中设置 `key: value`（value 原样写入） */
+export function setFrontmatter(md: string, key: string, value: string): string {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md)
+  if (!m) return `---\n${key}: ${value}\n---\n\n${md}`
+  const lines = m[1].split(/\r?\n/)
+  const i = lines.findIndex((l) => l.startsWith(`${key}:`))
+  if (i >= 0) lines[i] = `${key}: ${value}`
+  else lines.push(`${key}: ${value}`)
+  return `---\n${lines.join('\n')}\n---${md.slice(m[0].length)}`
+}
+
+function sectionRange(md: string, heading: string): { start: number; end: number } | null {
+  const re = new RegExp(`^## ${heading}[ \\t]*$`, 'm')
+  const m = re.exec(md)
+  if (!m) return null
+  const start = m.index + m[0].length
+  const next = /^## /m.exec(md.slice(start))
+  return { start, end: next ? start + next.index : md.length }
+}
+
+function writeSection(md: string, heading: string, body: (current: string) => string): string {
+  const range = sectionRange(md, heading)
+  if (!range) return `${md.replace(/\s*$/, '')}\n\n## ${heading}\n\n${body('')}\n`
+  const current = md.slice(range.start, range.end).trim()
+  const tail = range.end < md.length ? '\n\n' : '\n'
+  return `${md.slice(0, range.start)}\n\n${body(current)}${tail}${md.slice(range.end)}`
+}
+
+export function appendToSection(md: string, heading: string, line: string): string {
+  return writeSection(md, heading, (current) => (current ? `${current}\n${line}` : line))
+}
+
+/** 「结果」为占位文字时替换，否则追加一个以编号为标题的小节 */
+export function setResult(md: string, text: string, label: string): string {
+  return writeSection(md, '结果', (current) => (!current || current === PLACEHOLDER ? text : `${current}\n\n### ${label}\n\n${text}`))
+}
+
+export async function backfillCard(input: {
+  vaultPath: string
+  project: { obsidianLink: string; repoPath: string }
+  issue: { identifier: string; title: string; url: string; assigneeName: string | null }
+  description: string
+  conclusion: string | null
+  tapd: { id: string; kind: TapdKind } | null
+  now?: Date
+}): Promise<string> {
+  const { vaultPath, project, issue, tapd, now = new Date() } = input
+  const ts = dateTime(now)
+  const doneLine = issue.assigneeName
+    ? `${ts}：multica ${issue.identifier} 由「${issue.assigneeName}」完成，已验收。`
+    : `${ts}：multica ${issue.identifier} 已完成，已验收。`
+  const result = input.conclusion?.trim() || '智能体没有留下结论。'
+  const existing = (await findCardBy(vaultPath, 'multica_id', issue.identifier)) ?? (tapd ? await findCard(vaultPath, tapd.id) : null)
+  if (existing) {
+    const file = join(vaultPath, ...existing.split('/'))
+    let md = await readFile(file, 'utf8')
+    md = setFrontmatter(md, 'status', 'done')
+    md = setFrontmatter(md, 'updated', ts)
+    md = setFrontmatter(md, 'multica_id', `'${issue.identifier}'`)
+    md = appendToSection(md, '执行记录', `- ${doneLine}`)
+    md = setResult(md, result, issue.identifier)
+    await writeFile(file, md, 'utf8')
+    return existing
+  }
+  const folder = projectFolder(project.obsidianLink)
+  return writeNewCard(vaultPath, folder, issue.title, now, (folderName) =>
+    renderContent({
+      title: issue.title,
+      folderName,
+      repoPath: project.repoPath,
+      type: tapd ? TYPE_BY_KIND[tapd.kind] : 'feature',
+      status: 'done',
+      source: issue.url,
+      tapdId: tapd?.id ?? null,
+      multicaId: issue.identifier,
+      description: input.description.trim() || '（multica 描述为空）',
+      log: [`${ts}：从 multica ${issue.identifier} 生成。`, doneLine],
+      result,
+      now
+    })
+  )
+}
+
+async function writeNewCard(vaultPath: string, folder: string, title: string, now: Date, render: (folderName: string) => string): Promise<string> {
+  const dir = join(vaultPath, ...folder.split('/'))
+  await mkdir(dir, { recursive: true })
+  let name = cardFileName(title, now)
+  for (let n = 2; existsSync(join(dir, name)); n++) name = cardFileName(title, now, `-${n}`)
+  await writeFile(join(dir, name), render(folder.split('/').pop() ?? folder), { encoding: 'utf8', flag: 'wx' })
+  return `${folder}/${name}`
 }
 
 async function readHead(file: string): Promise<string> {
@@ -102,7 +227,12 @@ async function* taskFiles(dir: string): AsyncGenerator<string> {
 
 /** 返回 vault 相对路径（/ 分隔） */
 export async function findCard(vaultPath: string, tapdId: string): Promise<string | null> {
-  const pattern = new RegExp(`^tapd_id:\\s*['"]?${tapdId}['"]?\\s*$`, 'm')
+  return findCardBy(vaultPath, 'tapd_id', tapdId)
+}
+
+export async function findCardBy(vaultPath: string, field: string, value: string): Promise<string | null> {
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`^${field}:\\s*['"]?${escaped}['"]?\\s*$`, 'm')
   for await (const file of taskFiles(join(vaultPath, 'Projects'))) {
     if (pattern.test(await readHead(file))) return toPosix(relative(vaultPath, file))
   }
@@ -120,12 +250,7 @@ export async function createCard(input: {
   const existing = await findCard(vaultPath, item.id)
   if (existing) return existing
 
-  const folder = projectFolder(project.obsidianLink)
-  const dir = join(vaultPath, ...folder.split('/'))
-  await mkdir(dir, { recursive: true })
-  let name = cardFileName(item.title, now)
-  for (let n = 2; existsSync(join(dir, name)); n++) name = cardFileName(item.title, now, `-${n}`)
-  const content = renderCard({ item, description, folderName: folder.split('/').pop() ?? folder, repoPath: project.repoPath, now })
-  await writeFile(join(dir, name), content, { encoding: 'utf8', flag: 'wx' })
-  return `${folder}/${name}`
+  return writeNewCard(vaultPath, projectFolder(project.obsidianLink), item.title, now, (folderName) =>
+    renderCard({ item, description, folderName, repoPath: project.repoPath, now })
+  )
 }

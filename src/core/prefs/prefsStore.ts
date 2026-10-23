@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { Prefs, PrefsPatch, TapdPrefs } from '../../shared/types'
+import type { MulticaPrefs, Prefs, PrefsPatch, TapdPrefs } from '../../shared/types'
 
 /** 映射按 key 合并，空字符串表示删除该映射 */
 function mergeMap(prev: Record<string, string> = {}, patch?: Record<string, string>): Record<string, string> {
@@ -16,6 +16,10 @@ function mergeTapd(prev: TapdPrefs, patch: TapdPrefs): TapdPrefs {
     iterationRepos: mergeMap(prev.iterationRepos, patch.iterationRepos),
     itemRepos: mergeMap(prev.itemRepos, patch.itemRepos)
   }
+}
+
+function mergeMultica(prev: MulticaPrefs, patch: MulticaPrefs): MulticaPrefs {
+  return { ...prev, ...patch, projectMap: mergeMap(prev.projectMap, patch.projectMap) }
 }
 
 export class PrefsStore {
@@ -38,7 +42,8 @@ export class PrefsStore {
       repos[id] = { ...repos[id], ...entry }
     }
     const tapd = patch.tapd ? mergeTapd(this.prefs.tapd ?? {}, patch.tapd) : this.prefs.tapd
-    this.prefs = { ...this.prefs, ...patch, repos, ...(tapd && { tapd }) }
+    const multica = patch.multica ? mergeMultica(this.prefs.multica ?? {}, patch.multica) : this.prefs.multica
+    this.prefs = { ...this.prefs, ...patch, repos, ...(tapd && { tapd }), ...(multica && { multica }) }
     this.write()
     return this.prefs
   }

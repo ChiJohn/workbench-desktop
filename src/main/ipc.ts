@@ -1,14 +1,29 @@
 import { ipcMain, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename, resolve, sep } from 'node:path'
-import { createCard, findCard } from '../core/tasks/taskCard'
+import { backfillCard, createCard, findCard, findCardBy } from '../core/tasks/taskCard'
 import { mapLimit } from '../core/concurrency'
+import { desktopExe } from '../core/multica/multicaCli'
+import { dispatchDescription } from '../core/multica/multicaService'
 import { AppError, wrap } from '../core/result'
 import { findMiniprogramRoot } from '../core/launcher/launcherService'
 import { buildReleaseInfo } from '../core/release/releaseInfo'
 import { readScripts } from '../core/runner/packageScripts'
 import { Channels, Events, type FetchAllMap, type StatusMap } from '../shared/ipc'
-import type { OpenerKind, Prefs, PrefsPatch, Project, ReleaseJob, ReleaseRequest, TapdDetail } from '../shared/types'
+import type {
+  MulticaCommitRequest,
+  MulticaCompleteResult,
+  MulticaDispatchRequest,
+  MulticaIssueDetail,
+  OpenerKind,
+  Prefs,
+  PrefsPatch,
+  Project,
+  ReleaseJob,
+  ReleaseRequest,
+  TapdDetail,
+  TapdKind
+} from '../shared/types'
 import type { HotkeyManager } from './hotkey'
 import type { Services } from './services'
 import type { TapdPoller } from './tapdPoller'
@@ -38,7 +53,7 @@ async function availableProjects({ registry }: Services): Promise<Project[]> {
 }
 
 export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
-  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken } = services
+  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, multica } = services
   const repoPath = async (id: string) => (await registry.require(id)).repoPath
 
   handle(Channels.registryList, () => registry.load())
@@ -163,6 +178,86 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
     return null
   })
 
+  handle(Channels.gitChanges, async (id: string) => git.changes(await repoPath(id)))
+  handle(Channels.gitDiff, async (id: string, path: string) => git.diff(await repoPath(id), path))
+
+  const parseTapdKey = (key: string | null): { id: string; kind: TapdKind } | null => {
+    const m = key ? /^(story|bug|task):(\d+)$/.exec(key) : null
+    return m ? { kind: m[1] as TapdKind, id: m[2] } : null
+  }
+  const issueRepo = async (repoId: string | null) => (repoId ? registry.require(repoId) : null)
+  const backfill = async (detail: Omit<MulticaIssueDetail, 'card'>, project: Project) =>
+    backfillCard({
+      vaultPath: prefs.get().vaultPath,
+      project,
+      issue: detail.issue,
+      description: detail.description,
+      conclusion: detail.conclusion,
+      tapd: parseTapdKey(detail.issue.tapdKey)
+    })
+
+  handle(Channels.multicaOverview, async (force?: boolean) => {
+    await registry.current().catch(() => null)
+    return multica.overview(Boolean(force))
+  })
+  handle(Channels.multicaIssue, async (id: string): Promise<MulticaIssueDetail> => {
+    await registry.current().catch(() => null)
+    const detail = await multica.issue(id)
+    const vaultPath = prefs.get().vaultPath
+    const tapdRef = parseTapdKey(detail.issue.tapdKey)
+    const card = (await findCardBy(vaultPath, 'multica_id', detail.issue.identifier)) ?? (tapdRef ? await findCard(vaultPath, tapdRef.id) : null)
+    return { ...detail, card }
+  })
+  handle(Channels.multicaFindByTapd, (tapdKey: string) => multica.findByTapd(tapdKey))
+  handle(Channels.multicaDispatch, async (req: MulticaDispatchRequest) => {
+    await registry.current().catch(() => null)
+    const { item, description } = await tapd.detail(req.tapdKey)
+    const tapdPrefs = prefs.get().tapd
+    const tapdRepoId = item.iterationId ? tapdPrefs?.iterationRepos?.[item.iterationId] : tapdPrefs?.itemRepos?.[item.key]
+    const repoId = (req.projectId ? (await multica.project(req.projectId))?.repoId : null) ?? tapdRepoId
+    const repo = repoId ? registry.cachedProjects().find((p) => p.id === repoId) : undefined
+    const body = dispatchDescription({ repoPath: repo?.repoPath ?? null, kind: item.kind, url: item.url, body: description })
+    const result = await multica.dispatch(req, body)
+    if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
+    return result
+  })
+  handle(Channels.multicaComment, async (id: string, text: string) => {
+    if (!text.trim()) throw new AppError('INVALID_COMMENT', '评论不能为空')
+    await multica.comment(id, text)
+    return null
+  })
+  handle(Channels.multicaComplete, async (id: string, commit: MulticaCommitRequest | null): Promise<MulticaCompleteResult> => {
+    await registry.current().catch(() => null)
+    const detail = await multica.issue(id)
+    const project = await issueRepo(detail.issue.repoId)
+    let hash: string | null = null
+    if (commit) {
+      if (!project) throw new AppError('MULTICA_NO_REPO', '任务没有对应仓库，无法提交')
+      hash = await git.commitFiles(project.repoPath, commit.files, commit.message)
+    }
+    await multica.complete(id)
+    if (!project) return { card: null, commit: hash, warning: '任务没有对应仓库，未回填任务卡' }
+    try {
+      return { card: await backfill(detail, project), commit: hash }
+    } catch (e) {
+      return { card: null, commit: hash, warning: `已标为完成，但回填任务卡失败：${e instanceof Error ? e.message : String(e)}` }
+    }
+  })
+  handle(Channels.multicaBackfill, async (id: string) => {
+    await registry.current().catch(() => null)
+    const detail = await multica.issue(id)
+    const project = await issueRepo(detail.issue.repoId)
+    if (!project) throw new AppError('MULTICA_NO_REPO', '任务没有对应仓库，请先在设置中映射 multica 项目')
+    return backfill(detail, project)
+  })
+  handle(Channels.multicaLaunchDesktop, async () => {
+    const exe = desktopExe(process.env)
+    if (!existsSync(exe)) throw new AppError('MULTICA_DESKTOP_MISSING', '没有找到 multica 桌面端', exe)
+    const err = await shell.openPath(exe)
+    if (err) throw new AppError('MULTICA_DESKTOP_FAILED', `启动 multica 桌面端失败：${err}`)
+    return null
+  })
+
   // 加密后的令牌只在主进程使用
   handle(Channels.settingsGet, () => publicPrefs(prefs.get()))
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
@@ -170,6 +265,7 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
     const { tapdTokenEnc: _ignored, ...safePatch } = patch
     if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
     const next = prefs.update(safePatch)
+    if (safePatch.multica && ('profile' in safePatch.multica || 'cliPath' in safePatch.multica)) multica.reset()
     if (next.vaultPath !== prev.vaultPath) {
       registry.watch()
       await registry.load().catch(() => undefined)

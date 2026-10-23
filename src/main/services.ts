@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { GitService } from '../core/git/gitService'
 import { LauncherService } from '../core/launcher/launcherService'
+import { MulticaCli, resolveCliPath, resolveProfile } from '../core/multica/multicaCli'
+import { MulticaService } from '../core/multica/multicaService'
 import { PrefsStore } from '../core/prefs/prefsStore'
 import { RegistryService } from '../core/registry/registryService'
 import { detectWechatCli, WECHAT_CLI_CANDIDATES } from '../core/release/devtoolsPath'
@@ -24,6 +26,7 @@ export interface Services {
   tapdToken: TapdTokenStore
   tapd: TapdService
   tapdSeen: SeenStore
+  multica: MulticaService
 }
 
 function defaultPrefs(): Prefs {
@@ -43,16 +46,26 @@ export function createServices(): Services {
   const tapd = new TapdService(new TapdClient({ token: () => tapdToken.get() }), {
     disabledWorkspaces: () => prefs.get().tapd?.disabledWorkspaces ?? []
   })
+  const registry = new RegistryService(() => prefs.get().vaultPath)
+  const multicaCli = new MulticaCli({
+    resolveBin: () => resolveCliPath({ configured: prefs.get().multica?.cliPath, env: process.env }),
+    resolveProfile: () => resolveProfile({ configured: prefs.get().multica?.profile, env: process.env })
+  })
+  const multica = new MulticaService(multicaCli, {
+    repos: () => registry.cachedProjects(),
+    prefs: () => prefs.get().multica ?? {}
+  })
   return {
     prefs,
-    registry: new RegistryService(() => prefs.get().vaultPath),
+    registry,
     git: new GitService(),
     runner,
     launcher: new LauncherService(),
     release: new ReleaseService(runner),
     tapdToken,
     tapd,
-    tapdSeen: new SeenStore(join(app.getPath('userData'), 'tapd-seen.json'))
+    tapdSeen: new SeenStore(join(app.getPath('userData'), 'tapd-seen.json')),
+    multica
   }
 }
 

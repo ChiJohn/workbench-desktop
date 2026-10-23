@@ -75,6 +75,11 @@ export class RegistryService extends EventEmitter {
     return project
   }
 
+  /** 同步读取缓存中的项目列表；未加载时为空 */
+  cachedProjects(): Project[] {
+    return this.cache?.projects ?? []
+  }
+
   /** 同步读取缓存中的项目名，供托盘等不便等待的场景使用 */
   nameOf(id: string): string {
     return this.cache?.projects.find((p) => p.id === id)?.name ?? id

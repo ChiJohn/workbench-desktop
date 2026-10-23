@@ -21,7 +21,19 @@ const api: WorkbenchApi = {
     pull: (id) => invoke(Channels.gitPull, id),
     branches: (id) => invoke(Channels.gitBranches, id),
     checkout: (id, branch) => invoke(Channels.gitCheckout, id, branch),
-    createBranch: (id, branch) => invoke(Channels.gitCreateBranch, id, branch)
+    createBranch: (id, branch) => invoke(Channels.gitCreateBranch, id, branch),
+    changes: (id) => invoke(Channels.gitChanges, id),
+    diff: (id, path) => invoke(Channels.gitDiff, id, path)
+  },
+  multica: {
+    overview: (force) => invoke(Channels.multicaOverview, force),
+    issue: (id) => invoke(Channels.multicaIssue, id),
+    findByTapd: (tapdKey) => invoke(Channels.multicaFindByTapd, tapdKey),
+    dispatch: (req) => invoke(Channels.multicaDispatch, req),
+    comment: (id, text) => invoke(Channels.multicaComment, id, text),
+    complete: (id, commit) => invoke(Channels.multicaComplete, id, commit),
+    backfill: (id) => invoke(Channels.multicaBackfill, id),
+    launchDesktop: () => invoke(Channels.multicaLaunchDesktop)
   },
   runner: {
     scripts: (id) => invoke(Channels.runnerScripts, id),

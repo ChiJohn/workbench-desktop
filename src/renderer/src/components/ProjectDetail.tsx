@@ -5,6 +5,7 @@ import { relativeTime, TYPE_LABELS } from '../format'
 import { openWith, useGitAction, useSavePrefs } from '../queries'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ReleaseCard } from './ReleaseCard'
+import { RepoAgentCard } from './RepoAgentCard'
 import { ScriptList } from './ScriptList'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
@@ -189,6 +190,8 @@ export function ProjectDetail({ project, status, prefs }: Props) {
             <h2>脚本</h2>
             <ScriptList projectId={project.id} prefs={prefs} />
           </section>
+
+          <RepoAgentCard project={project} />
         </>
       )}
     </div>

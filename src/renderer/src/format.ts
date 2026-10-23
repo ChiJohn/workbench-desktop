@@ -55,6 +55,15 @@ export function clockTime(timestamp: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** ISO 时间转本地 `MM-DD HH:mm`；full 时为 `YYYY-MM-DD HH:mm:ss` */
+export function localTime(iso: string, full = false): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const p = (n: number) => String(n).padStart(2, '0')
+  const date = `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  return full ? `${d.getFullYear()}-${date}:${p(d.getSeconds())}` : date
+}
+
 const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07/g
 
 export function stripAnsi(text: string): string {

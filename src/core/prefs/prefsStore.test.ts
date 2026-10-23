@@ -64,6 +64,13 @@ describe('PrefsStore', () => {
     expect(store.update({ tapd: { disabledWorkspaces: [] } }).tapd?.disabledWorkspaces).toEqual([])
   })
 
+  it('merges multica project mappings per key and keeps other multica prefs', () => {
+    const store = new PrefsStore(file, defaults)
+    store.update({ multica: { workspaceId: 'w1', projectMap: { p1: 'a', p2: 'b' } } })
+    const next = store.update({ multica: { lastAgentId: 'ag', projectMap: { p1: '' } } })
+    expect(next.multica).toEqual({ workspaceId: 'w1', lastAgentId: 'ag', projectMap: { p2: 'b' } })
+  })
+
   it('persists updates to disk', () => {
     new PrefsStore(file, defaults).update({ wechatDevtoolsCli: 'C:\\cli.bat' })
     expect(JSON.parse(readFileSync(file, 'utf8')).wechatDevtoolsCli).toBe('C:\\cli.bat')

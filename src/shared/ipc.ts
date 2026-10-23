@@ -1,5 +1,12 @@
 import type {
   BranchList,
+  MulticaCommitRequest,
+  MulticaCompleteResult,
+  MulticaDispatchRequest,
+  MulticaDispatchResult,
+  MulticaIssue,
+  MulticaIssueDetail,
+  MulticaOverview,
   OpenerKind,
   Prefs,
   PrefsPatch,
@@ -15,7 +22,8 @@ import type {
   ScriptsInfo,
   TapdBoard,
   TapdDetail,
-  TapdStatus
+  TapdStatus,
+  WorktreeChange
 } from './types'
 
 export const Channels = {
@@ -46,6 +54,16 @@ export const Channels = {
   tapdTransition: 'tapd.transition',
   tapdCreateCard: 'tapd.createCard',
   tapdOpenCard: 'tapd.openCard',
+  gitChanges: 'git.changes',
+  gitDiff: 'git.diff',
+  multicaOverview: 'multica.overview',
+  multicaIssue: 'multica.issue',
+  multicaFindByTapd: 'multica.findByTapd',
+  multicaDispatch: 'multica.dispatch',
+  multicaComment: 'multica.comment',
+  multicaComplete: 'multica.complete',
+  multicaBackfill: 'multica.backfill',
+  multicaLaunchDesktop: 'multica.launchDesktop',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   appOpenExternal: 'app.openExternal'
@@ -79,6 +97,20 @@ export interface WorkbenchApi {
     branches(projectId: string): Promise<Result<BranchList>>
     checkout(projectId: string, branch: string): Promise<Result<null>>
     createBranch(projectId: string, branch: string): Promise<Result<null>>
+    changes(projectId: string): Promise<Result<WorktreeChange[]>>
+    diff(projectId: string, path: string): Promise<Result<string>>
+  }
+  multica: {
+    /** force 时清空元数据缓存 */
+    overview(force?: boolean): Promise<Result<MulticaOverview>>
+    issue(id: string): Promise<Result<MulticaIssueDetail>>
+    findByTapd(tapdKey: string): Promise<Result<MulticaIssue | null>>
+    dispatch(req: MulticaDispatchRequest): Promise<Result<MulticaDispatchResult>>
+    comment(id: string, text: string): Promise<Result<null>>
+    complete(id: string, commit: MulticaCommitRequest | null): Promise<Result<MulticaCompleteResult>>
+    /** 返回任务卡的 vault 相对路径 */
+    backfill(id: string): Promise<Result<string>>
+    launchDesktop(): Promise<Result<null>>
   }
   runner: {
     scripts(projectId: string): Promise<Result<ScriptsInfo>>

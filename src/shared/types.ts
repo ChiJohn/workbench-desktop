@@ -113,7 +113,126 @@ export interface Prefs {
   /** safeStorage 加密后的 TAPD 个人令牌（base64），不下发给渲染层 */
   tapdTokenEnc?: string
   tapd?: TapdPrefs
+  multica?: MulticaPrefs
   repos: Record<string, RepoPrefs>
+}
+
+export interface MulticaPrefs {
+  cliPath?: string
+  profile?: string
+  workspaceId?: string
+  /** multica 项目 id → 仓库项目 id；空字符串表示删除 */
+  projectMap?: Record<string, string>
+  lastAgentId?: string
+}
+
+export type MulticaAssigneeType = 'agent' | 'member' | 'squad'
+
+export interface MulticaIssue {
+  id: string
+  identifier: string
+  title: string
+  status: string
+  assigneeType: MulticaAssigneeType | null
+  assigneeId: string | null
+  assigneeName: string | null
+  projectId: string | null
+  projectTitle: string | null
+  /** 对应的仓库项目 id */
+  repoId: string | null
+  updatedAt: string
+  url: string
+  tapdKey: string | null
+}
+
+export interface MulticaAgent {
+  id: string
+  name: string
+}
+
+export interface MulticaProject {
+  id: string
+  title: string
+  repoId: string | null
+  matchedBy: 'manual' | 'path' | 'name' | null
+}
+
+export interface MulticaRuntime {
+  id: string
+  name: string
+  provider: string
+  online: boolean
+}
+
+export interface MulticaWorkspace {
+  id: string
+  name: string
+  slug: string
+}
+
+export interface MulticaOverview {
+  workspace: MulticaWorkspace
+  workspaces: MulticaWorkspace[]
+  /** null 表示读取守护进程状态失败 */
+  daemon: { running: boolean; runningTasks: number } | null
+  /** 本机守护进程注册的运行时 */
+  runtimes: MulticaRuntime[]
+  agents: MulticaAgent[]
+  projects: MulticaProject[]
+  /** 未完成（backlog / todo / in_progress / in_review / blocked） */
+  issues: MulticaIssue[]
+  fetchedAt: number
+}
+
+export interface MulticaComment {
+  id: string
+  authorType: string
+  authorName: string
+  content: string
+  createdAt: string
+}
+
+export interface MulticaIssueDetail {
+  issue: MulticaIssue
+  description: string
+  comments: MulticaComment[]
+  /** 最后一条智能体评论 */
+  conclusion: string | null
+  /** 已有任务卡的 vault 相对路径 */
+  card: string | null
+}
+
+export interface MulticaDispatchRequest {
+  tapdKey: string
+  title: string
+  /** multica 项目 id；null 表示不归属项目 */
+  projectId: string | null
+  /** null 表示暂不指派 */
+  agentId: string | null
+}
+
+export interface MulticaDispatchResult {
+  issue: MulticaIssue
+  /** metadata 写入失败等非致命问题 */
+  warning?: string
+}
+
+export interface MulticaCommitRequest {
+  files: string[]
+  message: string
+}
+
+export interface MulticaCompleteResult {
+  card: string | null
+  commit: string | null
+  /** 回填失败等非致命问题 */
+  warning?: string
+}
+
+export interface WorktreeChange {
+  path: string
+  /** porcelain v1 的两位状态码，如 ` M`、`??` */
+  code: string
 }
 
 export interface TapdPrefs {

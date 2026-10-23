@@ -3,7 +3,14 @@ import type { Project } from '../../../shared/types'
 import { qk, useFetchAll } from '../queries'
 import { useUi } from '../stores/ui'
 
-export function Toolbar({ projects, taskCount }: { projects: Project[]; taskCount?: number }) {
+interface Props {
+  projects: Project[]
+  taskCount?: number
+  /** 审核中的 multica 任务数 */
+  reviewCount?: number
+}
+
+export function Toolbar({ projects, taskCount, reviewCount }: Props) {
   const qc = useQueryClient()
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
@@ -33,6 +40,17 @@ export function Toolbar({ projects, taskCount }: { projects: Project[]; taskCoun
         >
           任务
           {taskCount !== undefined && taskCount > 0 && <span className="count-badge">{taskCount}</span>}
+        </button>
+        <button
+          className={view.kind === 'agents' ? 'btn btn-ghost active' : 'btn btn-ghost'}
+          onClick={() => setView({ kind: 'agents' })}
+        >
+          智能体
+          {reviewCount !== undefined && reviewCount > 0 && (
+            <span className="count-badge" title="审核中">
+              {reviewCount}
+            </span>
+          )}
         </button>
         <button className="btn" disabled={fetchAll.isPending} onClick={() => fetchAll.mutate()}>
           {fetchAll.isPending ? '正在 fetch…' : '全部 fetch'}

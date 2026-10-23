@@ -16,7 +16,62 @@ export const qk = {
   releaseInfo: (id: string) => ['releaseInfo', id] as const,
   tapdStatus: ['tapdStatus'] as const,
   tapdBoard: ['tapdBoard'] as const,
-  tapdDetail: (key: string) => ['tapdDetail', key] as const
+  tapdDetail: (key: string) => ['tapdDetail', key] as const,
+  multica: ['multica'] as const,
+  multicaIssue: (id: string) => ['multicaIssue', id] as const,
+  multicaByTapd: (key: string) => ['multicaByTapd', key] as const,
+  gitChanges: (id: string) => ['gitChanges', id] as const,
+  gitDiff: (id: string, path: string) => ['gitDiff', id, path] as const
+}
+
+export function useMulticaOverview() {
+  return useQuery({
+    queryKey: qk.multica,
+    queryFn: () => unwrap(api.multica.overview(false)),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: false
+  })
+}
+
+export async function refreshMultica(qc: QueryClient, force: boolean): Promise<void> {
+  try {
+    qc.setQueryData(qk.multica, await unwrap(api.multica.overview(force)))
+  } catch (e) {
+    toast.error(e, '刷新 multica 失败')
+  }
+}
+
+export function useMulticaIssue(id: string | null) {
+  return useQuery({
+    queryKey: qk.multicaIssue(id ?? ''),
+    queryFn: () => unwrap(api.multica.issue(id as string)),
+    enabled: Boolean(id),
+    retry: false
+  })
+}
+
+export function useMulticaByTapd(key: string) {
+  return useQuery({ queryKey: qk.multicaByTapd(key), queryFn: () => unwrap(api.multica.findByTapd(key)), retry: false })
+}
+
+export function useGitChanges(id: string | null) {
+  return useQuery({
+    queryKey: qk.gitChanges(id ?? ''),
+    queryFn: () => unwrap(api.git.changes(id as string)),
+    enabled: Boolean(id),
+    retry: false
+  })
+}
+
+export function useGitDiff(id: string, path: string | null) {
+  return useQuery({
+    queryKey: qk.gitDiff(id, path ?? ''),
+    queryFn: () => unwrap(api.git.diff(id, path as string)),
+    enabled: Boolean(path),
+    retry: false
+  })
 }
 
 export function useTapdStatus() {
