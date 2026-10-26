@@ -1289,3 +1289,136 @@ textarea.mono {
   background: var(--bg);
   font-size: 12px;
 }
+
+/* ---------- reports ---------- */
+
+.report-page {
+  max-width: none;
+}
+
+.page-header.wrap {
+  flex-wrap: wrap;
+}
+
+.report-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 42%) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+.report-material {
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+}
+
+.report-source {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+}
+
+.report-source-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.report-source-error {
+  margin: 6px 12px;
+}
+
+.report-group-title {
+  padding: 6px 12px 2px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.report-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 12px;
+  cursor: pointer;
+}
+
+.report-entry:hover {
+  background: var(--bg-hover);
+}
+
+.report-entry input {
+  margin-top: 3px;
+}
+
+.report-entry.off .report-entry-body {
+  opacity: 0.45;
+}
+
+.report-entry-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.report-entry-title {
+  word-break: break-word;
+}
+
+.report-entry-link {
+  margin-left: 4px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.report-entry-detail {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.report-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-progress {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.report-draft {
+  min-height: calc(100vh - 380px);
+  line-height: 1.6;
+}
+
+.form label.checkbox-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.reminder-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}

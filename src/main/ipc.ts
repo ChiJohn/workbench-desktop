@@ -21,10 +21,14 @@ import type {
   Project,
   ReleaseJob,
   ReleaseRequest,
+  ReportGenerateRequest,
+  ReportKind,
+  ReportRange,
   TapdDetail,
   TapdKind
 } from '../shared/types'
 import type { HotkeyManager } from './hotkey'
+import type { ReportController } from './report'
 import type { Services } from './services'
 import type { TapdPoller } from './tapdPoller'
 
@@ -35,6 +39,7 @@ export interface IpcDeps {
   services: Services
   hotkey: HotkeyManager
   poller: TapdPoller
+  report: ReportController
   send(channel: string, payload?: unknown): void
 }
 
@@ -52,7 +57,7 @@ async function availableProjects({ registry }: Services): Promise<Project[]> {
   return projects.filter((p) => p.available)
 }
 
-export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
+export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps): void {
   const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, multica } = services
   const repoPath = async (id: string) => (await registry.require(id)).repoPath
 
@@ -149,6 +154,7 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
   handle(Channels.tapdSetToken, (token: string | null) => {
     tapdToken.set(token)
     tapd.reset()
+    report.reset()
     return tapdToken.status()
   })
   handle(Channels.tapdBoard, (force?: boolean) => poller.refresh({ force: Boolean(force) }))
@@ -170,7 +176,7 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
     const vaultPath = prefs.get().vaultPath
     const full = resolve(vaultPath, relPath)
     if (!full.startsWith(resolve(vaultPath) + sep) || !existsSync(full)) {
-      throw new AppError('CARD_NOT_FOUND', `任务卡不存在：${relPath}`)
+      throw new AppError('CARD_NOT_FOUND', `vault 中没有这个文件：${relPath}`)
     }
     await shell.openExternal(
       `obsidian://open?vault=${encodeURIComponent(basename(vaultPath))}&file=${encodeURIComponent(relPath)}`
@@ -258,6 +264,14 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
     return null
   })
 
+  handle(Channels.reportCollect, (kind: ReportKind, range: ReportRange) => report.collect(kind, range))
+  handle(Channels.reportGenerate, (req: ReportGenerateRequest) => report.generate(req))
+  handle(Channels.reportCancel, () => {
+    report.cancel()
+    return null
+  })
+  handle(Channels.reportSave, (kind: ReportKind, range: ReportRange, content: string) => report.save(kind, range, content))
+
   // 加密后的令牌只在主进程使用
   handle(Channels.settingsGet, () => publicPrefs(prefs.get()))
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
@@ -266,6 +280,7 @@ export function registerIpc({ services, hotkey, poller, send }: IpcDeps): void {
     if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
     const next = prefs.update(safePatch)
     if (safePatch.multica && ('profile' in safePatch.multica || 'cliPath' in safePatch.multica)) multica.reset()
+    if (safePatch.report && ('authors' in safePatch.report || 'displayName' in safePatch.report)) report.reset()
     if (next.vaultPath !== prev.vaultPath) {
       registry.watch()
       await registry.load().catch(() => undefined)

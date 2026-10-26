@@ -57,6 +57,8 @@ interface RawTransition {
   Appendfield?: { FieldName?: string; FieldLabel?: string; Notnull?: string; DefaultValue?: unknown[] }[]
 }
 
+export type TapdHistoryItem = TapdItem & { done: boolean }
+
 export interface TapdServiceOptions {
   disabledWorkspaces: () => string[]
 }
@@ -108,6 +110,28 @@ export class TapdService {
       workspaces,
       errors: results.flatMap((r) => (r.error ? [r.error] : [])),
       fetchedAt: Date.now()
+    }
+  }
+
+  async nick(): Promise<string> {
+    return this.currentUser()
+  }
+
+  /** 时间段内有修改、由我处理（需求 / 任务处理人，缺陷修复人或处理人）的单子，含已完成 */
+  async history(range: { start: string; end: string }): Promise<{ items: TapdHistoryItem[]; errors: TapdBoard['errors'] }> {
+    const user = await this.currentUser()
+    const disabled = new Set(this.opts.disabledWorkspaces())
+    const enabled = (await this.participantWorkspaces(user)).filter((w) => !disabled.has(w.id))
+    const results = await mapLimit(enabled, WORKSPACE_CONCURRENCY, async (ws) => {
+      try {
+        return { items: await this.workspaceHistory(ws, user, `${range.start}~${range.end}`) }
+      } catch (e) {
+        return { error: { workspaceId: ws.id, workspaceName: ws.name, message: toErrorInfo(e).message } }
+      }
+    })
+    return {
+      items: results.flatMap((r) => r.items ?? []).sort((a, b) => b.modified.localeCompare(a.modified)),
+      errors: results.flatMap((r) => (r.error ? [r.error] : []))
     }
   }
 
@@ -208,6 +232,40 @@ export class TapdService {
       ...stories.map((r) => normalizeStory(r, ctx(meta.story.labels))),
       ...bugs.map((r) => normalizeBug(r, ctx(meta.bug.labels))),
       ...tasks.map((r) => normalizeTask(r, ctx(TASK_STATUS_LABELS)))
+    ]
+  }
+
+  private async workspaceHistory(ws: { id: string; name: string }, nick: string, modified: string): Promise<TapdHistoryItem[]> {
+    const meta = await this.workspaceMeta(ws.id)
+    const query = async (kind: TapdKind, ownerParam: string, fields: string) => {
+      const e = ENTITY[kind]
+      const rows = await this.client.listAll(e.path, { workspace_id: ws.id, [ownerParam]: nick, modified, fields }, e.entity)
+      return rows.map((r): Raw => ({ ...r, workspace_id: r.workspace_id ?? ws.id }))
+    }
+    const bugFields = `${ENTITY.bug.fields},fixer`
+    const [stories, tasks, fixed, owned] = await Promise.all([
+      query('story', 'owner', ENTITY.story.fields),
+      query('task', 'owner', ENTITY.task.fields),
+      query('bug', 'fixer', bugFields),
+      query('bug', 'current_owner', bugFields)
+    ])
+    const bugs = [...new Map([...fixed, ...owned].map((r) => [r.id, r])).values()].filter(
+      (r) => hasOwner(r.fixer, nick) || hasOwner(r.current_owner, nick)
+    )
+    const mine = {
+      story: stories.filter((r) => hasOwner(r.owner, nick)),
+      task: tasks.filter((r) => hasOwner(r.owner, nick))
+    }
+    await this.loadIterations(ws.id, [...mine.story, ...bugs, ...mine.task].map((r) => r.iteration_id))
+    const ctx = (labels: Record<string, string>): NormalizeContext => ({
+      workspaceName: ws.name,
+      statusLabels: labels,
+      iterations: Object.fromEntries(this.iterations)
+    })
+    return [
+      ...mine.story.map((r) => ({ ...normalizeStory(r, ctx(meta.story.labels)), done: meta.story.final.has(r.status ?? '') })),
+      ...bugs.map((r) => ({ ...normalizeBug(r, ctx(meta.bug.labels)), done: meta.bug.final.has(r.status ?? '') })),
+      ...mine.task.map((r) => ({ ...normalizeTask(r, ctx(TASK_STATUS_LABELS)), done: r.status === 'done' }))
     ]
   }
 

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { MulticaPrefs, Prefs, PrefsPatch, TapdPrefs } from '../../shared/types'
+import type { MulticaPrefs, Prefs, PrefsPatch, ReportPrefs, TapdPrefs } from '../../shared/types'
 
 /** 映射按 key 合并，空字符串表示删除该映射 */
 function mergeMap(prev: Record<string, string> = {}, patch?: Record<string, string>): Record<string, string> {
@@ -20,6 +20,15 @@ function mergeTapd(prev: TapdPrefs, patch: TapdPrefs): TapdPrefs {
 
 function mergeMultica(prev: MulticaPrefs, patch: MulticaPrefs): MulticaPrefs {
   return { ...prev, ...patch, projectMap: mergeMap(prev.projectMap, patch.projectMap) }
+}
+
+function mergeReport(prev: ReportPrefs, patch: ReportPrefs): ReportPrefs {
+  return {
+    ...prev,
+    ...patch,
+    ...((prev.notes || patch.notes) && { notes: mergeMap(prev.notes, patch.notes) }),
+    ...((prev.reminders || patch.reminders) && { reminders: { ...prev.reminders, ...patch.reminders } })
+  }
 }
 
 export class PrefsStore {
@@ -43,7 +52,8 @@ export class PrefsStore {
     }
     const tapd = patch.tapd ? mergeTapd(this.prefs.tapd ?? {}, patch.tapd) : this.prefs.tapd
     const multica = patch.multica ? mergeMultica(this.prefs.multica ?? {}, patch.multica) : this.prefs.multica
-    this.prefs = { ...this.prefs, ...patch, repos, ...(tapd && { tapd }), ...(multica && { multica }) }
+    const report = patch.report ? mergeReport(this.prefs.report ?? {}, patch.report) : this.prefs.report
+    this.prefs = { ...this.prefs, ...patch, repos, ...(tapd && { tapd }), ...(multica && { multica }), ...(report && { report }) }
     this.write()
     return this.prefs
   }

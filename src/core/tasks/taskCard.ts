@@ -2,6 +2,9 @@ import { existsSync } from 'node:fs'
 import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { TapdItem, TapdKind } from '../../shared/types'
+import { appendToSection, setFrontmatter, writeSection } from '../markdown/sections'
+
+export { appendToSection, setFrontmatter }
 
 const TITLE_MAX = 60
 const FRONTMATTER_BYTES = 4096
@@ -113,38 +116,6 @@ export function renderCard(input: {
 
 const PLACEHOLDER = '待填写。'
 
-/** 在首个 frontmatter 块中设置 `key: value`（value 原样写入） */
-export function setFrontmatter(md: string, key: string, value: string): string {
-  const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(md)
-  if (!m) return `---\n${key}: ${value}\n---\n\n${md}`
-  const lines = m[1].split(/\r?\n/)
-  const i = lines.findIndex((l) => l.startsWith(`${key}:`))
-  if (i >= 0) lines[i] = `${key}: ${value}`
-  else lines.push(`${key}: ${value}`)
-  return `---\n${lines.join('\n')}\n---${md.slice(m[0].length)}`
-}
-
-function sectionRange(md: string, heading: string): { start: number; end: number } | null {
-  const re = new RegExp(`^## ${heading}[ \\t]*$`, 'm')
-  const m = re.exec(md)
-  if (!m) return null
-  const start = m.index + m[0].length
-  const next = /^## /m.exec(md.slice(start))
-  return { start, end: next ? start + next.index : md.length }
-}
-
-function writeSection(md: string, heading: string, body: (current: string) => string): string {
-  const range = sectionRange(md, heading)
-  if (!range) return `${md.replace(/\s*$/, '')}\n\n## ${heading}\n\n${body('')}\n`
-  const current = md.slice(range.start, range.end).trim()
-  const tail = range.end < md.length ? '\n\n' : '\n'
-  return `${md.slice(0, range.start)}\n\n${body(current)}${tail}${md.slice(range.end)}`
-}
-
-export function appendToSection(md: string, heading: string, line: string): string {
-  return writeSection(md, heading, (current) => (current ? `${current}\n${line}` : line))
-}
-
 /** 「结果」为占位文字时替换，否则追加一个以编号为标题的小节 */
 export function setResult(md: string, text: string, label: string): string {
   return writeSection(md, '结果', (current) => (!current || current === PLACEHOLDER ? text : `${current}\n\n### ${label}\n\n${text}`))
@@ -216,7 +187,8 @@ async function readHead(file: string): Promise<string> {
   }
 }
 
-async function* taskFiles(dir: string): AsyncGenerator<string> {
+/** 递归列出 `task-*.md`（跳过隐藏目录） */
+export async function* taskFiles(dir: string): AsyncGenerator<string> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
   for (const e of entries) {
     const full = join(dir, e.name)

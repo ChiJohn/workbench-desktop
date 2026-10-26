@@ -52,7 +52,8 @@ function fakeTapd(fail: string[] = []) {
         return ok(
           wrap('Bug', [
             { id: `${ws}11`, workspace_id: ws, title: '新缺陷', status: 'new', current_owner: `${ME};`, iteration_id: '0', modified: '2026-10-24 09:00:00' },
-            { id: `${ws}12`, workspace_id: ws, title: '已关闭', status: 'closed', current_owner: `${ME};`, iteration_id: '0', modified: '2026-10-20 09:00:00' }
+            { id: `${ws}12`, workspace_id: ws, title: '已关闭', status: 'closed', current_owner: `${ME};`, iteration_id: '0', modified: '2026-10-20 09:00:00' },
+            { id: `${ws}13`, workspace_id: ws, title: '我修的已转测', status: 'closed', current_owner: '测试;', fixer: ME, iteration_id: '0', modified: '2026-10-19 09:00:00' }
           ])
         )
       case '/tasks':
@@ -122,6 +123,36 @@ describe('TapdService.board', () => {
     board = await service.board()
     expect(board.workspaces.find((w) => w.id === '1')?.enabled).toBe(false)
     expect(tapd.calls.filter((c) => c.path === '/stories' && c.params.workspace_id === '1')).toHaveLength(1)
+  })
+})
+
+describe('TapdService.history', () => {
+  const range = { start: '2026-10-17', end: '2026-10-23' }
+
+  it('collects items I handled in the range, finished or not, including bugs I fixed', async () => {
+    const { items, errors } = await service.history(range)
+    expect(errors).toEqual([])
+    const ws1 = items.filter((i) => i.workspaceId === '1')
+    expect(ws1.map((i) => `${i.key}:${i.statusLabel}:${i.done}`).sort()).toEqual([
+      'bug:111:新:false',
+      'bug:112:已关闭:true',
+      'bug:113:已关闭:true',
+      'story:101:未启动:false',
+      'story:102:已上线:true',
+      'task:121:进行中:false',
+      'task:122:已完成:true'
+    ])
+    const stories = tapd.calls.find((c) => c.path === '/stories' && c.params.workspace_id === '1')
+    expect(stories?.params).toMatchObject({ owner: ME, modified: '2026-10-17~2026-10-23' })
+    const bugQueries = tapd.calls.filter((c) => c.path === '/bugs' && c.params.workspace_id === '1').map((c) => c.params.fixer ?? c.params.current_owner)
+    expect(bugQueries.sort()).toEqual([ME, ME])
+  })
+
+  it('isolates failing workspaces', async () => {
+    make(['2'])
+    const { items, errors } = await service.history(range)
+    expect(errors).toEqual([{ workspaceId: '2', workspaceName: '白驹充电', message: 'TAPD：无权限' }])
+    expect(items.every((i) => i.workspaceId === '1')).toBe(true)
   })
 })
 

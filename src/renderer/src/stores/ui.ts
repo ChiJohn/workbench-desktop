@@ -5,6 +5,7 @@ export type View =
   | { kind: 'project'; id: string }
   | { kind: 'tasks' }
   | { kind: 'agents' }
+  | { kind: 'reports' }
   | { kind: 'settings' }
 
 interface UiState {

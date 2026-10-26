@@ -12,6 +12,7 @@ import type {
   MulticaWorkspace,
   TapdKind
 } from '../../shared/types'
+import { formatDate } from '../../shared/reportPeriod'
 import { mapLimit } from '../concurrency'
 import { AppError } from '../result'
 import { matchProjects, type RawProject, type RepoRef } from './projectMatch'
@@ -23,10 +24,32 @@ const META_TTL_MS = 5 * 60_000
 const PAGE_SIZE = 100
 const MAX_PAGES = 20
 const CONCURRENCY = 3
+const MAX_CONCLUSIONS = 30
 const ISSUE_FIELDS = 'id,identifier,title,status,assignee_type,assignee_id,project_id,updated_at,metadata'
 const DEFAULT_WORKSPACE = 'jinbi'
 const KIND_LABELS: Record<TapdKind, string> = { story: '需求', bug: '缺陷', task: '任务' }
 const ASSIGNEE_FALLBACK: Record<string, string> = { member: '成员', squad: '小队', agent: '智能体' }
+
+export type MulticaDoneIssue = MulticaIssue & { conclusion: string | null }
+
+const SUMMARY_MAX = 200
+const HEADING = /^#{1,6}\s+/
+
+/** 第一段正文（跳过标题行），都是标题时取第一个标题 */
+function summaryOf(text: string): string | null {
+  const paragraphs = text.split(/\n\s*\n/)
+  const body = paragraphs
+    .map((p) =>
+      p
+        .split('\n')
+        .filter((l) => !HEADING.test(l.trim()))
+        .join(' ')
+        .trim()
+    )
+    .find(Boolean)
+  const summary = body ?? paragraphs[0]?.trim().replace(HEADING, '') ?? ''
+  return summary ? summary.slice(0, SUMMARY_MAX) : null
+}
 
 export interface MulticaCliLike {
   json<T>(args: string[], opts?: { workspaceId?: string; cwd?: string }): Promise<T>
@@ -200,6 +223,25 @@ export class MulticaService {
   async complete(id: string): Promise<void> {
     const meta = await this.loadMeta()
     await this.cli.json(['issue', 'status', id, 'done', '--no-start'], { workspaceId: meta.workspace.id })
+  }
+
+  /** 时间段（本地日期，含首尾）内完成的 issue，按更新时间倒序，附最后一条智能体评论的第一段 */
+  async doneBetween(range: { start: string; end: string }): Promise<MulticaDoneIssue[]> {
+    const meta = await this.loadMeta()
+    const ctx = this.context(meta)
+    const wsId = meta.workspace.id
+    const raws = (await this.listIssues(wsId, ['--status', 'done']))
+      .filter((r) => {
+        const day = formatDate(new Date(r.updated_at))
+        return day >= range.start && day <= range.end
+      })
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    const conclusions = await mapLimit(raws.slice(0, MAX_CONCLUSIONS), CONCURRENCY, async (r) => {
+      const comments = (await this.cli.json<RawComment[]>(['issue', 'comment', 'list', r.id, '--compact'], { workspaceId: wsId }).catch(() => null)) ?? []
+      const last = [...comments].sort((a, b) => a.created_at.localeCompare(b.created_at)).reverse().find((c) => c.author_type === 'agent')
+      return last ? summaryOf(normalizeText(last.content)) : null
+    })
+    return raws.map((r, i) => ({ ...this.toIssue(r, ctx), conclusion: conclusions[i] ?? null }))
   }
 
   private async listIssues(workspaceId: string, filter: string[]): Promise<RawIssue[]> {

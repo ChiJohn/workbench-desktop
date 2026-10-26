@@ -71,6 +71,13 @@ describe('PrefsStore', () => {
     expect(next.multica).toEqual({ workspaceId: 'w1', lastAgentId: 'ag', projectMap: { p2: 'b' } })
   })
 
+  it('merges report notes per key and reminder settings field by field', () => {
+    const store = new PrefsStore(file, defaults)
+    store.update({ report: { writer: 'cursor', notes: { 'weekly:2026-10-17': '周会', 'daily:2026-10-23': 'x' }, reminders: { daily: '18:00' } } })
+    const next = store.update({ report: { notes: { 'daily:2026-10-23': '' }, reminders: { enabled: false } } })
+    expect(next.report).toEqual({ writer: 'cursor', notes: { 'weekly:2026-10-17': '周会' }, reminders: { daily: '18:00', enabled: false } })
+  })
+
   it('persists updates to disk', () => {
     new PrefsStore(file, defaults).update({ wechatDevtoolsCli: 'C:\\cli.bat' })
     expect(JSON.parse(readFileSync(file, 'utf8')).wechatDevtoolsCli).toBe('C:\\cli.bat')

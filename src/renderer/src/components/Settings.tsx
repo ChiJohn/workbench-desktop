@@ -5,6 +5,7 @@ import { api, unwrap } from '../api'
 import { qk, refreshTapdBoard, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
 import { MulticaSettings } from './MulticaSettings'
+import { ReportSettings } from './ReportSettings'
 
 interface Props {
   prefs?: Prefs
@@ -166,6 +167,8 @@ export function Settings({ prefs, registry, registryError, tapdStatus, board }: 
       <TapdSettings status={tapdStatus} board={board} disabled={prefs?.tapd?.disabledWorkspaces ?? []} />
 
       <MulticaSettings prefs={prefs?.multica ?? {}} projects={registry?.projects ?? []} />
+
+      <ReportSettings prefs={prefs?.report ?? {}} />
 
       <section className="card">
         <h2>仓库映射</h2>

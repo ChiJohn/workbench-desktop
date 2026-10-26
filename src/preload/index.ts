@@ -61,6 +61,12 @@ const api: WorkbenchApi = {
     createCard: (key, projectId) => invoke(Channels.tapdCreateCard, key, projectId),
     openCard: (relPath) => invoke(Channels.tapdOpenCard, relPath)
   },
+  report: {
+    collect: (kind, range) => invoke(Channels.reportCollect, kind, range),
+    generate: (req) => invoke(Channels.reportGenerate, req),
+    cancel: () => invoke(Channels.reportCancel),
+    save: (kind, range, content) => invoke(Channels.reportSave, kind, range, content)
+  },
   settings: {
     get: () => invoke(Channels.settingsGet),
     set: (patch) => invoke(Channels.settingsSet, patch)
@@ -75,7 +81,9 @@ const api: WorkbenchApi = {
     runnerStarted: (cb) => subscribe(Events.runnerStarted, cb),
     releaseChanged: (cb) => subscribe(Events.releaseChanged, cb),
     tapdUpdated: (cb) => subscribe(Events.tapdUpdated, cb),
-    tapdFocus: (cb) => subscribe(Events.tapdFocus, cb)
+    tapdFocus: (cb) => subscribe(Events.tapdFocus, cb),
+    reportProgress: (cb) => subscribe(Events.reportProgress, cb),
+    reportOpen: (cb) => subscribe(Events.reportOpen, cb)
   }
 }
 

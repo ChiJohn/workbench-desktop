@@ -1,10 +1,13 @@
 import { app, BrowserWindow, dialog, Menu, Notification, shell } from 'electron'
 import { join } from 'node:path'
 import { Events } from '../shared/ipc'
-import type { TapdItem } from '../shared/types'
+import { REPORT_KIND_LABELS } from '../shared/reportPeriod'
+import type { ReportKind, TapdItem } from '../shared/types'
 import { HotkeyManager } from './hotkey'
 import { createAppIcon } from './icon'
 import { registerIpc } from './ipc'
+import { ReportController } from './report'
+import { ReportReminder } from './reportReminder'
 import { createServices, ensureWechatCli } from './services'
 import { TapdPoller } from './tapdPoller'
 import { createTray } from './tray'
@@ -87,6 +90,17 @@ function notifyNewItems(items: TapdItem[], send: (channel: string, payload?: unk
   notification.show()
 }
 
+function notifyReport(kind: ReportKind, send: (channel: string, payload?: unknown) => void): void {
+  if (!Notification.isSupported()) return
+  const label = REPORT_KIND_LABELS[kind]
+  const notification = new Notification({ title: `该写${label}了`, body: `点击打开工作台「汇报」生成${label}` })
+  notification.on('click', () => {
+    showWindow()
+    send(Events.reportOpen, kind)
+  })
+  notification.show()
+}
+
 function bootstrap(): void {
   const services = createServices()
   const hotkey = new HotkeyManager(toggleWindow)
@@ -116,8 +130,15 @@ function bootstrap(): void {
     notify: (items) => notifyNewItems(items, send)
   })
 
-  registerIpc({ services, hotkey, poller, send })
+  const report = new ReportController(services, (text) => send(Events.reportProgress, text))
+  registerIpc({ services, hotkey, poller, report, send })
   poller.start()
+  const reminder = new ReportReminder({
+    prefs: () => services.prefs.get().report?.reminders,
+    exists: async (kind, range) => (await report.existing(kind, range)) !== null,
+    notify: (kind) => notifyReport(kind, send)
+  })
+  reminder.start()
 
   services.registry.load().catch(() => undefined)
   services.registry.watch()
@@ -163,6 +184,8 @@ function bootstrap(): void {
 
   app.on('will-quit', () => {
     poller.stop()
+    reminder.stop()
+    report.cancel()
     hotkey.dispose()
     services.registry.unwatch()
     tray.destroy()

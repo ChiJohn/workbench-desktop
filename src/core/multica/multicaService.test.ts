@@ -244,3 +244,32 @@ describe('MulticaService comment / complete', () => {
     expect(calls.at(-1)?.workspaceId).toBe('w1')
   })
 })
+
+describe('MulticaService.doneBetween', () => {
+  it('keeps done issues updated in the local date range with the first paragraph of the agent conclusion', async () => {
+    const done = [
+      issue(1, 'done', { updated_at: '2026-10-16T04:00:00Z' }),
+      issue(2, 'done', { updated_at: '2026-10-18T04:00:00Z' }),
+      issue(3, 'done', { updated_at: '2026-10-23T04:00:00Z', assignee_type: null, assignee_id: null }),
+      issue(4, 'done', { updated_at: '2026-10-24T04:00:00Z' })
+    ]
+    const { s, calls } = service({
+      ...baseRoutes({ done }),
+      'issue comment list': (args) =>
+        args[3] === 'i2'
+          ? [
+              { id: 'c1', author_type: 'agent', author_id: 'a1', content: '旧结论', created_at: '2026-10-18T01:00:00Z' },
+              { id: 'c2', author_type: 'agent', author_id: 'a1', content: '## 完成：列表改造\r\n\r\n已完成列表改造。\r\n\r\n细节：…', created_at: '2026-10-18T03:00:00Z' },
+              { id: 'c3', author_type: 'member', author_id: 'm1', content: '好的', created_at: '2026-10-18T04:00:00Z' }
+            ]
+          : []
+    })
+    const issues = await s.doneBetween({ start: '2026-10-17', end: '2026-10-23' })
+    expect(issues.map((i) => [i.identifier, i.conclusion])).toEqual([
+      ['JINB-3', null],
+      ['JINB-2', '已完成列表改造。']
+    ])
+    expect(calls.find((c) => c.args[0] === 'issue' && c.args[1] === 'list')?.args).toContain('done')
+  })
+})
+

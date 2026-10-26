@@ -32,6 +32,37 @@ export function parsePorcelainZ(out: string): WorktreeChange[] {
   return result
 }
 
+export interface GitCommit {
+  hash: string
+  /** 作者时间 ISO */
+  time: string
+  subject: string
+  files: number
+  insertions: number
+  deletions: number
+}
+
+/** `--format=%x1e%H%x1f%aI%x1f%s --shortstat` */
+export function parseLog(out: string): GitCommit[] {
+  return out
+    .split('\x1e')
+    .filter((r) => r.trim())
+    .map((record) => {
+      const [head, ...rest] = record.split('\n')
+      const [hash, time, subject] = head.split('\x1f')
+      const stat = rest.join('\n')
+      const num = (re: RegExp) => Number(re.exec(stat)?.[1] ?? 0)
+      return {
+        hash,
+        time,
+        subject: subject ?? '',
+        files: num(/(\d+) files? changed/),
+        insertions: num(/(\d+) insertions?\(\+\)/),
+        deletions: num(/(\d+) deletions?\(-\)/)
+      }
+    })
+}
+
 function assertBranchName(name: string): void {
   if (!name.trim() || name.trim().startsWith('-')) {
     throw new AppError('INVALID_BRANCH', `非法的分支名：「${name}」`)
@@ -114,6 +145,41 @@ export class GitService {
     await this.run(repoPath, ['add', '-A', '--', ...files], QUICK_TIMEOUT)
     await this.run(repoPath, ['commit', '-m', message.trim(), '--', ...files], COMMIT_TIMEOUT)
     return (await this.run(repoPath, ['rev-parse', '--short', 'HEAD'], QUICK_TIMEOUT)).trim()
+  }
+
+  async toplevel(repoPath: string): Promise<string> {
+    return (await this.run(repoPath, ['rev-parse', '--show-toplevel'], QUICK_TIMEOUT)).trim()
+  }
+
+  /**
+   * 所有引用上指定作者的提交（不含合并），日期为包含首尾的本地日期；
+   * 在子目录下执行时只统计该目录内的改动
+   */
+  async log(repoPath: string, opts: { since: string; until: string; authors: string[] }): Promise<GitCommit[]> {
+    if (!opts.authors.length) return []
+    const out = await this.run(
+      repoPath,
+      [
+        '-c',
+        'core.quotepath=off',
+        'log',
+        '--all',
+        '--no-merges',
+        '--fixed-strings',
+        `--since=${opts.since} 00:00:00`,
+        `--until=${opts.until} 23:59:59`,
+        ...opts.authors.map((a) => `--author=${a}`),
+        '--format=%x1e%H%x1f%aI%x1f%s',
+        '--shortstat',
+        '--',
+        '.'
+      ],
+      NETWORK_TIMEOUT
+    ).catch((e) => {
+      if (e instanceof AppError && e.code === 'GIT_FAILED' && /does not have any commits/.test(e.detail ?? '')) return ''
+      throw e
+    })
+    return parseLog(out)
   }
 
   private async requireChanged(repoPath: string, files: string[]): Promise<WorktreeChange[]> {

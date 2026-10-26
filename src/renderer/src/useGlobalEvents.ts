@@ -5,6 +5,7 @@ import { api, unwrap } from './api'
 import { formatBytes } from './format'
 import { qk } from './queries'
 import { useReleases } from './stores/releases'
+import { useReport } from './stores/report'
 import { useRuns } from './stores/runs'
 import { toast } from './stores/toast'
 import { useUi } from './stores/ui'
@@ -44,6 +45,11 @@ export function useGlobalEvents(): void {
       api.on.tapdFocus((key) => {
         useUi.getState().setView({ kind: 'tasks' })
         useUi.getState().setTaskKey(key)
+      }),
+      api.on.reportProgress((text) => useReport.getState().setProgress(text)),
+      api.on.reportOpen((kind) => {
+        useReport.getState().open(kind)
+        useUi.getState().setView({ kind: 'reports' })
       }),
       api.on.releaseChanged((job) => {
         const prev = useReleases.getState().upsert(job)

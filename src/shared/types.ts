@@ -114,7 +114,75 @@ export interface Prefs {
   tapdTokenEnc?: string
   tapd?: TapdPrefs
   multica?: MulticaPrefs
+  report?: ReportPrefs
   repos: Record<string, RepoPrefs>
+}
+
+export type ReportKind = 'daily' | 'weekly' | 'monthly'
+export type ReportWriter = 'claude' | 'cursor'
+
+export interface ReportPrefs {
+  /** git 作者（匹配 user.name / email），默认 git config user.name */
+  authors?: string[]
+  /** 月报文件名中的姓名，默认 TAPD 昵称 */
+  displayName?: string
+  writer?: ReportWriter
+  claudePath?: string
+  cursorAgentPath?: string
+  /** `类型:开始日期` → 手动补充；空字符串表示删除 */
+  notes?: Record<string, string>
+  reminders?: ReportReminderPrefs
+}
+
+export interface ReportReminderPrefs {
+  enabled?: boolean
+  /** HH:mm */
+  daily?: string
+  weekly?: string
+  monthly?: string
+}
+
+/** 包含首尾的本地日期 YYYY-MM-DD */
+export interface ReportRange {
+  start: string
+  end: string
+}
+
+export type ReportSource = 'git' | 'tapd' | 'multica' | 'cards'
+
+export interface ReportEntry {
+  /** 稳定 id，用于排除 */
+  id: string
+  source: ReportSource
+  /** 分组名：项目 / TAPD 项目 */
+  group: string
+  title: string
+  detail?: string
+  /** 本地时间 YYYY-MM-DD HH:mm */
+  time: string
+  url?: string
+}
+
+export interface ReportSourceResult {
+  source: ReportSource
+  entries: ReportEntry[]
+  error?: string
+}
+
+export interface ReportMaterial {
+  kind: ReportKind
+  range: ReportRange
+  sources: ReportSourceResult[]
+  /** 已有报告：vault 相对路径与内容（日报为小节内容） */
+  existing: { path: string; content: string } | null
+  collectedAt: number
+}
+
+export interface ReportGenerateRequest {
+  kind: ReportKind
+  range: ReportRange
+  entries: ReportEntry[]
+  notes: string
 }
 
 export interface MulticaPrefs {

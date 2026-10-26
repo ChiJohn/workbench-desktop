@@ -4,6 +4,7 @@ import { LogPanel } from './components/LogPanel'
 import { Overview } from './components/Overview'
 import { ProjectDetail } from './components/ProjectDetail'
 import { ProjectList } from './components/ProjectList'
+import { ReportsPage } from './components/ReportsPage'
 import { Settings } from './components/Settings'
 import { TasksPage } from './components/TasksPage'
 import { Toasts } from './components/Toasts'
@@ -40,6 +41,7 @@ export function App() {
       return <TasksPage status={tapdStatus.data} board={board} projects={projects} prefs={prefs.data} />
     }
     if (view.kind === 'agents') return <AgentsPage overview={multica} projects={projects} />
+    if (view.kind === 'reports') return <ReportsPage prefs={prefs.data} />
     if (registry.isLoading) return <div className="page hint">读取仓库映射…</div>
     if (registry.error) return <EmptyState message={registry.error.message} />
     if (projects.length === 0) return <EmptyState message="仓库映射中没有解析到项目，请检查「已确认映射」表格" />

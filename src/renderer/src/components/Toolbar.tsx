@@ -52,6 +52,12 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
             </span>
           )}
         </button>
+        <button
+          className={view.kind === 'reports' ? 'btn btn-ghost active' : 'btn btn-ghost'}
+          onClick={() => setView({ kind: 'reports' })}
+        >
+          汇报
+        </button>
         <button className="btn" disabled={fetchAll.isPending} onClick={() => fetchAll.mutate()}>
           {fetchAll.isPending ? '正在 fetch…' : '全部 fetch'}
         </button>

@@ -14,6 +14,10 @@ import type {
   ReleaseInfo,
   ReleaseJob,
   ReleaseRequest,
+  ReportGenerateRequest,
+  ReportKind,
+  ReportMaterial,
+  ReportRange,
   RepoStatus,
   Result,
   RunnerExitEvent,
@@ -64,6 +68,10 @@ export const Channels = {
   multicaComplete: 'multica.complete',
   multicaBackfill: 'multica.backfill',
   multicaLaunchDesktop: 'multica.launchDesktop',
+  reportCollect: 'report.collect',
+  reportGenerate: 'report.generate',
+  reportCancel: 'report.cancel',
+  reportSave: 'report.save',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   appOpenExternal: 'app.openExternal'
@@ -76,7 +84,9 @@ export const Events = {
   runnerStarted: 'runner:started',
   releaseChanged: 'release:changed',
   tapdUpdated: 'tapd:updated',
-  tapdFocus: 'tapd:focus'
+  tapdFocus: 'tapd:focus',
+  reportProgress: 'report:progress',
+  reportOpen: 'report:open'
 } as const
 
 export type StatusMap = Record<string, Result<RepoStatus>>
@@ -140,6 +150,14 @@ export interface WorkbenchApi {
     createCard(key: string, projectId: string): Promise<Result<string>>
     openCard(relPath: string): Promise<Result<null>>
   }
+  report: {
+    collect(kind: ReportKind, range: ReportRange): Promise<Result<ReportMaterial>>
+    /** 返回草稿正文；进度通过 on.reportProgress 推送 */
+    generate(req: ReportGenerateRequest): Promise<Result<string>>
+    cancel(): Promise<Result<null>>
+    /** 返回 vault 相对路径 */
+    save(kind: ReportKind, range: ReportRange, content: string): Promise<Result<string>>
+  }
   settings: {
     get(): Promise<Result<Prefs>>
     set(patch: PrefsPatch): Promise<Result<Prefs>>
@@ -155,5 +173,8 @@ export interface WorkbenchApi {
     releaseChanged(cb: (job: ReleaseJob) => void): Unsubscribe
     tapdUpdated(cb: (board: TapdBoard) => void): Unsubscribe
     tapdFocus(cb: (key: string) => void): Unsubscribe
+    reportProgress(cb: (text: string) => void): Unsubscribe
+    /** 点击汇报提醒 */
+    reportOpen(cb: (kind: ReportKind) => void): Unsubscribe
   }
 }

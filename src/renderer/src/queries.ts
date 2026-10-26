@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import type { StatusMap } from '../../shared/ipc'
-import type { OpenerKind, PrefsPatch, Project, ReleaseRequest } from '../../shared/types'
+import type { OpenerKind, PrefsPatch, Project, ReleaseRequest, ReportKind, ReportRange } from '../../shared/types'
 import { api, unwrap } from './api'
 import { useReleases } from './stores/releases'
 import { useRuns } from './stores/runs'
@@ -21,7 +21,8 @@ export const qk = {
   multicaIssue: (id: string) => ['multicaIssue', id] as const,
   multicaByTapd: (key: string) => ['multicaByTapd', key] as const,
   gitChanges: (id: string) => ['gitChanges', id] as const,
-  gitDiff: (id: string, path: string) => ['gitDiff', id, path] as const
+  gitDiff: (id: string, path: string) => ['gitDiff', id, path] as const,
+  report: (kind: ReportKind, range: ReportRange) => ['report', kind, range.start, range.end] as const
 }
 
 export function useMulticaOverview() {
@@ -70,6 +71,16 @@ export function useGitDiff(id: string, path: string | null) {
     queryKey: qk.gitDiff(id, path ?? ''),
     queryFn: () => unwrap(api.git.diff(id, path as string)),
     enabled: Boolean(path),
+    retry: false
+  })
+}
+
+/** 收集较慢且读取多个外部系统，只在切换时间段或手动「重新收集」时拉取 */
+export function useReportMaterial(kind: ReportKind, range: ReportRange) {
+  return useQuery({
+    queryKey: qk.report(kind, range),
+    queryFn: () => unwrap(api.report.collect(kind, range)),
+    staleTime: Infinity,
     retry: false
   })
 }
