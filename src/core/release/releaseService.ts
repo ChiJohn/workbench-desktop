@@ -10,6 +10,7 @@ import type { RunnerService } from '../runner/runnerService'
 import { buildCliCommand, type CliInput } from './cliCommand'
 import { detectCliError } from './cliOutput'
 import { resolveProjectDir } from './projectDir'
+import { qrToDataUrl } from './qrDataUrl'
 import { isValidVersion, sanitizeDesc } from './releaseConfig'
 
 export interface ReleaseContext {
@@ -149,7 +150,11 @@ export class ReleaseService extends EventEmitter {
           this.startCli(job.projectId, actionStep.label, cli, { kind: 'preview', projectDir: projectDir.dir, qrOutput, infoOutput }, ctx, env)
         )
         if (!existsSync(qrOutput)) throw new AppError('QR_NOT_FOUND', '预览完成但没有生成二维码文件', qrOutput)
-        job.qrDataUrl = toDataUrl(await readFile(qrOutput, 'utf8'))
+        try {
+          job.qrDataUrl = qrToDataUrl(await readFile(qrOutput))
+        } catch (e) {
+          throw new AppError('QR_INVALID', `二维码文件无法显示：${(e as Error).message}`, qrOutput)
+        }
         job.qrAt = Date.now()
       } else {
         const version = req.version as string
@@ -235,11 +240,6 @@ export class ReleaseService extends EventEmitter {
   private emitChanged(job: ReleaseJob): void {
     this.emit('changed', structuredClone(job))
   }
-}
-
-function toDataUrl(content: string): string {
-  const text = content.trim()
-  return text.startsWith('data:') ? text : `data:image/png;base64,${text}`
 }
 
 async function readPackageSize(infoPath: string): Promise<number | undefined> {
