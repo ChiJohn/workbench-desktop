@@ -1,5 +1,6 @@
 import type { StatusMap } from '../../../shared/ipc'
-import type { Project } from '../../../shared/types'
+import type { CnbSummaryItem, Project } from '../../../shared/types'
+import { CnbBadge } from './CnbCard'
 import { healthOf, relativeTime, TYPE_LABELS } from '../format'
 import { useUi } from '../stores/ui'
 import { StatusDot } from './StatusDot'
@@ -7,11 +8,13 @@ import { StatusDot } from './StatusDot'
 interface Props {
   projects: Project[]
   status?: StatusMap
+  builds?: CnbSummaryItem[]
   loading: boolean
 }
 
-export function Overview({ projects, status, loading }: Props) {
+export function Overview({ projects, status, builds, loading }: Props) {
   const setView = useUi((s) => s.setView)
+  const byProject = new Map(builds?.map((item) => [item.projectId, item]))
 
   return (
     <div className="page">
@@ -31,6 +34,7 @@ export function Overview({ projects, status, loading }: Props) {
             <th className="num">改动</th>
             <th className="num">↑ / ↓</th>
             <th>最近提交</th>
+            <th>构建</th>
           </tr>
         </thead>
         <tbody>
@@ -82,6 +86,9 @@ export function Overview({ projects, status, loading }: Props) {
                     </td>
                   </>
                 )}
+                <td>
+                  {builds ? <CnbBadge item={byProject.get(p.id)} /> : <span className="muted">—</span>}
+                </td>
               </tr>
             )
           })}

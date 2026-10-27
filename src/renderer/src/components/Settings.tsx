@@ -15,6 +15,7 @@ interface Props {
   registryError?: Error | null
   tapdStatus?: TapdStatus
   apifoxStatus?: TapdStatus
+  cnbStatus?: TapdStatus
   board?: TapdBoard
 }
 
@@ -212,7 +213,55 @@ function QuickLinkSettings({ links }: { links?: QuickLink[] }) {
   )
 }
 
-export function Settings({ prefs, registry, registryError, tapdStatus, apifoxStatus, board }: Props) {
+function CnbSettings({ status }: { status?: TapdStatus }) {
+  const qc = useQueryClient()
+  const [token, setToken] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const applyToken = async (value: string | null) => {
+    setBusy(true)
+    try {
+      qc.setQueryData(qk.cnbStatus, await unwrap(api.cnb.setToken(value)))
+      qc.invalidateQueries({ queryKey: qk.cnbSummary })
+      setToken('')
+      toast.success(value ? 'CNB 令牌已保存' : 'CNB 令牌已清除')
+    } catch (e) {
+      toast.error(e, '保存令牌失败')
+    }
+    setBusy(false)
+  }
+
+  return (
+    <section className="card form">
+      <h2>CNB</h2>
+      <p>令牌：{status?.hasToken ? '已配置' : '未配置'}</p>
+      <label>
+        <span>{status?.hasToken ? '替换令牌' : '访问令牌'}</span>
+        <input
+          className="mono"
+          type="password"
+          autoComplete="off"
+          placeholder="CNB 个人访问令牌"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <small>读取记录需要构建历史只读权限，触发构建还需要 repo-cnb-trigger:rw。令牌加密保存，只在主进程使用</small>
+      </label>
+      <div className="button-row">
+        <button className="btn btn-primary" disabled={busy || !token.trim()} onClick={() => void applyToken(token)}>
+          保存令牌
+        </button>
+        {status?.hasToken && (
+          <button className="btn" disabled={busy} onClick={() => void applyToken(null)}>
+            清除
+          </button>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function Settings({ prefs, registry, registryError, tapdStatus, apifoxStatus, cnbStatus, board }: Props) {
   const qc = useQueryClient()
   const save = useSavePrefs()
   const [form, setForm] = useState<Prefs | null>(prefs ?? null)
@@ -355,6 +404,8 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
       <TapdSettings status={tapdStatus} board={board} disabled={prefs?.tapd?.disabledWorkspaces ?? []} />
 
       <ApifoxSettings status={apifoxStatus} />
+
+      <CnbSettings status={cnbStatus} />
 
       <MulticaSettings prefs={prefs?.multica ?? {}} projects={registry?.projects ?? []} />
 

@@ -8,6 +8,7 @@ import { mapLimit } from '../core/concurrency'
 import { desktopExe } from '../core/multica/multicaCli'
 import { dispatchDescription } from '../core/multica/multicaService'
 import { AppError, wrap } from '../core/result'
+import { remoteWebUrl } from '../shared/repoUrl'
 import { findMiniprogramRoot } from '../core/launcher/launcherService'
 import { buildReleaseInfo } from '../core/release/releaseInfo'
 import { readScripts } from '../core/runner/packageScripts'
@@ -45,6 +46,7 @@ import { AssistantController } from './assistant'
 import type { ProjectAdmin } from '../core/registry/projectAdmin'
 import type { RepoClone } from '../core/registry/repoClone'
 import type { Services } from './services'
+import { CnbController } from './cnb'
 import { StickyNoteController } from './stickyNote'
 import { ShellHost } from './shell'
 import { TodoController } from './todo'
@@ -65,7 +67,7 @@ export interface IpcDeps {
 }
 
 function publicPrefs(p: Prefs): Prefs {
-  const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, ...rest } = p
+  const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, cnbTokenEnc: _cnb, ...rest } = p
   return rest
 }
 
@@ -79,7 +81,7 @@ async function availableProjects({ registry }: Services): Promise<Project[]> {
 }
 
 export function registerIpc({ services, hotkey, poller, report, knowledge, projects, clones, send }: IpcDeps): void {
-  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, apifoxToken, multica } = services
+  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, apifoxToken, cnbToken, multica } = services
   const align = new AlignController({
     vault: () => prefs.get().vaultPath,
     token: () => apifoxToken.get(),
@@ -119,6 +121,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   })
   handle(Channels.gitPull, async (id: string) => {
     await git.pull(await repoPath(id))
+    return null
+  })
+  handle(Channels.gitPush, async (id: string) => {
+    await git.push(await repoPath(id))
     return null
   })
   handle(Channels.gitBranches, async (id: string) => git.branches(await repoPath(id)))
@@ -220,6 +226,12 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
 
   handle(Channels.apifoxStatus, () => apifoxToken.status())
   handle(Channels.apifoxSetToken, (token: string | null) => apifoxToken.set(token))
+  const cnb = new CnbController(services)
+  handle(Channels.cnbStatus, () => cnbToken.status())
+  handle(Channels.cnbSetToken, (token: string | null) => cnbToken.set(token))
+  handle(Channels.cnbList, (projectId: string) => cnb.list(projectId))
+  handle(Channels.cnbSummary, () => cnb.summary())
+  handle(Channels.cnbStart, (projectId: string, branch: string) => cnb.start(projectId, branch))
   handle(Channels.alignList, (key: string) => align.state(key))
   handle(Channels.alignAdd, (key: string, url: string) => align.add(key, url))
   handle(Channels.alignRefresh, (key: string, url: string) => align.refresh(key, url))
@@ -229,6 +241,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
 
   handle(Channels.gitChanges, async (id: string) => git.changes(await repoPath(id)))
   handle(Channels.gitDiff, async (id: string, path: string) => git.diff(await repoPath(id), path))
+  handle(Channels.gitRemoteWeb, async (id: string) => {
+    const remote = await git.origin(await repoPath(id))
+    return remote ? remoteWebUrl(remote) : null
+  })
 
   const parseTapdKey = (key: string | null): { id: string; kind: TapdKind } | null => {
     const m = key ? /^(story|bug|task):(\d+)$/.exec(key) : null
@@ -360,7 +376,7 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.settingsGet, () => publicPrefs(prefs.get()))
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
     const prev = prefs.get()
-    const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, ...safePatch } = patch
+    const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, cnbTokenEnc: _cnb, ...safePatch } = patch
     if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
     const next = prefs.update(safePatch)
     if (safePatch.multica && ('profile' in safePatch.multica || 'cliPath' in safePatch.multica)) multica.reset()

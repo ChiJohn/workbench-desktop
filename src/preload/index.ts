@@ -19,11 +19,13 @@ const api: WorkbenchApi = {
     fetchAll: () => invoke(Channels.gitFetchAll),
     fetch: (id) => invoke(Channels.gitFetch, id),
     pull: (id) => invoke(Channels.gitPull, id),
+    push: (id) => invoke(Channels.gitPush, id),
     branches: (id) => invoke(Channels.gitBranches, id),
     checkout: (id, branch) => invoke(Channels.gitCheckout, id, branch),
     createBranch: (id, branch) => invoke(Channels.gitCreateBranch, id, branch),
     changes: (id) => invoke(Channels.gitChanges, id),
-    diff: (id, path) => invoke(Channels.gitDiff, id, path)
+    diff: (id, path) => invoke(Channels.gitDiff, id, path),
+    remoteWeb: (id) => invoke(Channels.gitRemoteWeb, id)
   },
   multica: {
     overview: (force) => invoke(Channels.multicaOverview, force),
@@ -72,6 +74,13 @@ const api: WorkbenchApi = {
   apifox: {
     status: () => invoke(Channels.apifoxStatus),
     setToken: (token) => invoke(Channels.apifoxSetToken, token)
+  },
+  cnb: {
+    status: () => invoke(Channels.cnbStatus),
+    setToken: (token) => invoke(Channels.cnbSetToken, token),
+    list: (projectId) => invoke(Channels.cnbList, projectId),
+    summary: () => invoke(Channels.cnbSummary),
+    start: (projectId, branch) => invoke(Channels.cnbStart, projectId, branch)
   },
   align: {
     list: (key) => invoke(Channels.alignList, key),

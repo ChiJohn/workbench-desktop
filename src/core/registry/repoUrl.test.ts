@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { repoNameFromUrl } from '../../shared/repoUrl'
+import { repoNameFromUrl, remoteWebUrl } from '../../shared/repoUrl'
 
 describe('repoNameFromUrl', () => {
   it('reads https, ssh and scp addresses', () => {
@@ -14,5 +14,20 @@ describe('repoNameFromUrl', () => {
     expect(repoNameFromUrl('not a url')).toBeNull()
     expect(repoNameFromUrl('https://github.com/')).toBeNull()
     expect(repoNameFromUrl('')).toBeNull()
+  })
+})
+
+describe('remoteWebUrl', () => {
+  it('turns https, scp and ssh remotes into a browser address', () => {
+    expect(remoteWebUrl('https://cnb.jinbizhihui.com/jinbizhihui/duojing/lvcc-manage-admin.git')).toBe(
+      'https://cnb.jinbizhihui.com/jinbizhihui/duojing/lvcc-manage-admin'
+    )
+    expect(remoteWebUrl('git@github.com:acme/travel-admin.git')).toBe('https://github.com/acme/travel-admin')
+    expect(remoteWebUrl('ssh://git@github.com:22/acme/travel-admin.git')).toBe('https://github.com/acme/travel-admin')
+  })
+
+  it('returns null when there is no web address', () => {
+    expect(remoteWebUrl('')).toBeNull()
+    expect(remoteWebUrl('D:\\code\\travel-admin')).toBeNull()
   })
 })

@@ -29,3 +29,30 @@ export function repoNameFromUrl(url: string): string | null {
   if (!name || /[\\/|[\]#]/.test(name) || name === '.' || name === '..') return null
   return name
 }
+
+/** 把 git 远程地址换成浏览器能打开的 https 地址 */
+export function remoteWebUrl(remote: string): string | null {
+  const text = remote.trim().replace(/\.git$/i, '')
+  if (!text) return null
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      const url = new URL(text)
+      const path = url.pathname.replace(/\/+$/, '')
+      if (!url.hostname || path === '' || path === '/') return null
+      return `${url.protocol}//${url.host}${path}`
+    } catch {
+      return null
+    }
+  }
+  const scp = /^[\w.+-]+@([\w.-]+):(.+)$/.exec(text)
+  if (scp) return https(scp[1], scp[2])
+  const ssh = /^ssh:\/\/(?:[\w.+-]+@)?([^/]+)\/(.+)$/i.exec(text)
+  if (ssh) return https(ssh[1].replace(/:\d+$/, ''), ssh[2])
+  return null
+}
+
+function https(host: string, path: string): string | null {
+  const slug = path.replace(/^\/+|\/+$/g, '')
+  if (!host || !slug) return null
+  return `https://${host}/${slug}`
+}

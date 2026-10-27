@@ -92,6 +92,11 @@ export class GitService {
     await this.run(repoPath, ['pull', '--ff-only'], NETWORK_TIMEOUT)
   }
 
+  /** 推送当前分支到已有上游，不使用 --force */
+  async push(repoPath: string): Promise<void> {
+    await this.run(repoPath, ['push'], NETWORK_TIMEOUT)
+  }
+
   async branches(repoPath: string): Promise<BranchList> {
     const out = await this.run(repoPath, ['branch', '--format=%(HEAD)%00%(refname:short)'], QUICK_TIMEOUT)
     return parseBranchList(out)
@@ -180,6 +185,15 @@ export class GitService {
       throw e
     })
     return parseLog(out)
+  }
+
+  async origin(repoPath: string): Promise<string | null> {
+    try {
+      const out = await this.run(repoPath, ['remote', 'get-url', 'origin'], QUICK_TIMEOUT)
+      return out.trim() || null
+    } catch {
+      return null
+    }
   }
 
   private async requireChanged(repoPath: string, files: string[]): Promise<WorktreeChange[]> {

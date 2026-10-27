@@ -122,4 +122,18 @@ describe('GitService', () => {
     await git.pull(a)
     expect(await git.status(a)).toMatchObject({ behind: 0, lastCommit: expect.objectContaining({ subject: 'from b' }) })
   })
+
+  it('pushes the current branch to its upstream', async () => {
+    const remote = join(root, 'remote.git')
+    sh(root, 'init', '-q', '--bare', '-b', 'main', remote)
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'init')
+    sh(repo, 'remote', 'add', 'origin', remote)
+    sh(repo, 'push', '-q', '-u', 'origin', 'main')
+    commit(repo, 'b.txt', 'local')
+    expect(await git.status(repo)).toMatchObject({ ahead: 1 })
+    await git.push(repo)
+    expect(await git.status(repo)).toMatchObject({ ahead: 0, behind: 0, lastCommit: expect.objectContaining({ subject: 'local' }) })
+  })
 })

@@ -10,6 +10,7 @@ import { useUi } from '../stores/ui'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ReleaseCard } from './ReleaseCard'
 import { RepoAgentCard } from './RepoAgentCard'
+import { CnbCard } from './CnbCard'
 import { ScriptList } from './ScriptList'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
@@ -17,6 +18,19 @@ const OPENER_LABELS: Record<OpenerKind, string> = {
   terminal: '终端',
   explorer: '资源管理器',
   wechat: '微信开发者工具'
+}
+
+async function openRemote(projectId: string) {
+  try {
+    const url = await unwrap(api.git.remoteWeb(projectId))
+    if (!url) {
+      toast.error(new Error('这个仓库没有可打开的远程地址'), '打开失败')
+      return
+    }
+    await unwrap(api.app.openExternal(url))
+  } catch (e) {
+    toast.error(e, '打开失败')
+  }
 }
 
 interface Props {
@@ -126,6 +140,9 @@ export function ProjectDetail({ project, status, prefs }: Props) {
                   {OPENER_LABELS[o]}
                 </button>
               ))}
+              <button className="btn" onClick={() => void openRemote(project.id)}>
+                去远程仓库
+              </button>
               <label className="inline-field">
                 双击打开
                 <select
@@ -155,6 +172,23 @@ export function ProjectDetail({ project, status, prefs }: Props) {
                 }}
               >
                 pull
+              </button>
+              <button
+                className="btn"
+                disabled={action.isPending}
+                onClick={() => {
+                  const branch = r?.ok ? (r.data.branch ?? '(detached)') : '当前分支'
+                  const ahead = r?.ok ? r.data.ahead : 0
+                  if (
+                    window.confirm(
+                      `确认 push？\n\n项目：${project.name}\n分支：${branch}\n领先 ${ahead} 个提交，推送到已有上游，不强制覆盖远程`
+                    )
+                  ) {
+                    action.mutate({ kind: 'push', id: project.id })
+                  }
+                }}
+              >
+                push
               </button>
               <button
                 className="btn"
@@ -206,6 +240,8 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               </label>
             )}
           </section>
+
+          <CnbCard projectId={project.id} branch={r?.ok ? r.data.branch : null} />
 
           {project.type === 'miniapp' && (
             <section className="card">

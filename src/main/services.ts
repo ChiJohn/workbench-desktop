@@ -15,6 +15,7 @@ import { TapdClient } from '../core/tapd/tapdClient'
 import { TapdService } from '../core/tapd/tapdService'
 import { TapdTokenStore } from './tapdToken'
 import { ApifoxTokenStore } from './apifoxToken'
+import { CnbTokenStore } from './cnbToken'
 import type { Prefs } from '../shared/types'
 
 export interface Services {
@@ -26,6 +27,7 @@ export interface Services {
   release: ReleaseService
   tapdToken: TapdTokenStore
   apifoxToken: ApifoxTokenStore
+  cnbToken: CnbTokenStore
   tapd: TapdService
   tapdSeen: SeenStore
   multica: MulticaService
@@ -47,6 +49,7 @@ export function createServices(): Services {
   const runner = new RunnerService()
   const tapdToken = new TapdTokenStore(prefs)
   const apifoxToken = new ApifoxTokenStore(prefs)
+  const cnbToken = new CnbTokenStore(prefs)
   const tapd = new TapdService(new TapdClient({ token: () => tapdToken.get() }), {
     disabledWorkspaces: () => prefs.get().tapd?.disabledWorkspaces ?? []
   })
@@ -68,6 +71,7 @@ export function createServices(): Services {
     release: new ReleaseService(runner),
     tapdToken,
     apifoxToken,
+    cnbToken,
     tapd,
     tapdSeen: new SeenStore(join(app.getPath('userData'), 'tapd-seen.json')),
     multica

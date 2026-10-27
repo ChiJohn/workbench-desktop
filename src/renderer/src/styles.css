@@ -1535,6 +1535,32 @@ textarea.mono {
   color: var(--accent);
 }
 
+.task-status.st-failed {
+  background: rgba(224, 116, 109, 0.13);
+  color: var(--red);
+}
+
+.cnb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.cnb-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cnb-title:hover {
+  color: var(--accent);
+}
+
 .task-status.st-done {
   background: rgba(88, 180, 126, 0.13);
   color: var(--green);

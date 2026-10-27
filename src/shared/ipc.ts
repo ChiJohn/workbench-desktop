@@ -13,6 +13,9 @@ import type {
   Project,
   ProjectType,
   ProjectWriteRequest,
+  CnbProjectBuilds,
+  CnbBuildStart,
+  CnbSummaryItem,
   CloneProgress,
   CloneRequest,
   RegistryResult,
@@ -57,6 +60,7 @@ export const Channels = {
   gitFetchAll: 'git.fetchAll',
   gitFetch: 'git.fetch',
   gitPull: 'git.pull',
+  gitPush: 'git.push',
   gitBranches: 'git.branches',
   gitCheckout: 'git.checkout',
   gitCreateBranch: 'git.createBranch',
@@ -86,6 +90,11 @@ export const Channels = {
   tapdOpenCard: 'tapd.openCard',
   apifoxStatus: 'apifox.status',
   apifoxSetToken: 'apifox.setToken',
+  cnbStatus: 'cnb.status',
+  cnbSetToken: 'cnb.setToken',
+  cnbList: 'cnb.list',
+  cnbSummary: 'cnb.summary',
+  cnbStart: 'cnb.start',
   alignList: 'align.list',
   alignAdd: 'align.add',
   alignRefresh: 'align.refresh',
@@ -94,6 +103,7 @@ export const Channels = {
   alignMcpSnippet: 'align.mcpSnippet',
   gitChanges: 'git.changes',
   gitDiff: 'git.diff',
+  gitRemoteWeb: 'git.remoteWeb',
   multicaOverview: 'multica.overview',
   multicaIssue: 'multica.issue',
   multicaFindByTapd: 'multica.findByTapd',
@@ -166,11 +176,15 @@ export interface WorkbenchApi {
     fetchAll(): Promise<Result<FetchAllMap>>
     fetch(projectId: string): Promise<Result<null>>
     pull(projectId: string): Promise<Result<null>>
+    /** 推送当前分支到已有上游 */
+    push(projectId: string): Promise<Result<null>>
     branches(projectId: string): Promise<Result<BranchList>>
     checkout(projectId: string, branch: string): Promise<Result<null>>
     createBranch(projectId: string, branch: string): Promise<Result<null>>
     changes(projectId: string): Promise<Result<WorktreeChange[]>>
     diff(projectId: string, path: string): Promise<Result<string>>
+    /** 仓库 origin 对应的网页地址；没有远程时为 null */
+    remoteWeb(projectId: string): Promise<Result<string | null>>
   }
   multica: {
     /** force 时清空元数据缓存 */
@@ -224,6 +238,14 @@ export interface WorkbenchApi {
   apifox: {
     status(): Promise<Result<TapdStatus>>
     setToken(token: string | null): Promise<Result<TapdStatus>>
+  }
+  cnb: {
+    status(): Promise<Result<TapdStatus>>
+    setToken(token: string | null): Promise<Result<TapdStatus>>
+    list(projectId: string): Promise<Result<CnbProjectBuilds>>
+    summary(): Promise<Result<CnbSummaryItem[]>>
+    /** 用 CNB 上该分支的最新提交触发流水线 */
+    start(projectId: string, branch: string): Promise<Result<CnbBuildStart>>
   }
   align: {
     list(tapdKey: string): Promise<Result<AlignState>>

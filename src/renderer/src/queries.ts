@@ -16,6 +16,9 @@ export const qk = {
   releaseInfo: (id: string) => ['releaseInfo', id] as const,
   tapdStatus: ['tapdStatus'] as const,
   apifoxStatus: ['apifoxStatus'] as const,
+  cnbStatus: ['cnbStatus'] as const,
+  cnbSummary: ['cnbSummary'] as const,
+  cnbList: (id: string) => ['cnbList', id] as const,
   align: (key: string) => ['align', key] as const,
   tapdBoard: ['tapdBoard'] as const,
   tapdDetail: (key: string) => ['tapdDetail', key] as const,
@@ -93,6 +96,21 @@ export function useTapdStatus() {
 
 export function useApifoxStatus() {
   return useQuery({ queryKey: qk.apifoxStatus, queryFn: () => unwrap(api.apifox.status()) })
+}
+
+export function useCnbStatus() {
+  return useQuery({ queryKey: qk.cnbStatus, queryFn: () => unwrap(api.cnb.status()) })
+}
+
+export function useCnbSummary(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.cnbSummary,
+    queryFn: () => unwrap(api.cnb.summary()),
+    enabled,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false
+  })
 }
 
 export function useTapdBoard(enabled: boolean) {
@@ -177,11 +195,12 @@ export async function refreshStatus(qc: QueryClient, id: string): Promise<void> 
 }
 
 type GitAction =
-  | { kind: 'pull' | 'fetch'; id: string }
+  | { kind: 'pull' | 'fetch' | 'push'; id: string }
   | { kind: 'checkout' | 'createBranch'; id: string; branch: string }
 
 const ACTION_LABELS: Record<GitAction['kind'], string> = {
   pull: 'pull',
+  push: 'push',
   fetch: 'fetch',
   checkout: '切换分支',
   createBranch: '新建分支'
@@ -194,6 +213,8 @@ export function useGitAction() {
       switch (a.kind) {
         case 'pull':
           return unwrap(api.git.pull(a.id))
+        case 'push':
+          return unwrap(api.git.push(a.id))
         case 'fetch':
           return unwrap(api.git.fetch(a.id))
         case 'checkout':

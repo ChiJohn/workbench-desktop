@@ -13,7 +13,7 @@ import { StickyNote } from './components/StickyNote'
 import { AssistantDock } from './components/AssistantDock'
 import { Toasts } from './components/Toasts'
 import { Toolbar } from './components/Toolbar'
-import { useApifoxStatus, useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
+import { useApifoxStatus, useCnbStatus, useCnbSummary, useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
 import { DepositDialog } from './components/DepositDialog'
 import { useUi } from './stores/ui'
 import { useGlobalEvents } from './useGlobalEvents'
@@ -25,6 +25,8 @@ export function App() {
   const prefs = usePrefs()
   const tapdStatus = useTapdStatus()
   const apifoxStatus = useApifoxStatus()
+  const cnbStatus = useCnbStatus()
+  const cnbSummary = useCnbSummary(Boolean(cnbStatus.data?.hasToken))
   const board = useTapdBoard(Boolean(tapdStatus.data?.hasToken))
   const projects = registry.data?.projects ?? []
   const status = useStatusAll(projects.length > 0)
@@ -40,6 +42,7 @@ export function App() {
           registryError={registry.error}
           tapdStatus={tapdStatus.data}
           apifoxStatus={apifoxStatus.data}
+          cnbStatus={cnbStatus.data}
           board={board.data}
         />
       )
@@ -65,7 +68,7 @@ export function App() {
       const project = projects.find((p) => p.id === view.id)
       if (project) return <ProjectDetail project={project} status={status.data} prefs={prefs.data} />
     }
-    return <Overview projects={projects} status={status.data} loading={status.isFetching} />
+    return <Overview projects={projects} status={status.data} builds={cnbStatus.data?.hasToken ? cnbSummary.data : undefined} loading={status.isFetching} />
   }
 
   return (

@@ -168,6 +168,39 @@ export interface TodoItem {
   issue: string | null
 }
 
+export interface CnbBuild {
+  sn: string
+  status: string
+  title: string
+  ref: string
+  event: string
+  sha: string
+  user: string
+  createTime: string
+  durationMs: number | null
+  url: string
+}
+
+export interface CnbProjectBuilds {
+  slug: string | null
+  web: string | null
+  builds: CnbBuild[]
+}
+
+/** 只表示触发成功，不表示流水线已经跑完 */
+export interface CnbBuildStart {
+  sn: string
+  url: string
+  message: string
+}
+
+export interface CnbSummaryItem {
+  projectId: string
+  slug: string
+  latest: CnbBuild | null
+  error?: string
+}
+
 export interface QuickLink {
   name: string
   url: string
@@ -186,6 +219,8 @@ export interface Prefs {
   tapdTokenEnc?: string
   /** safeStorage 加密后的 Apifox 访问令牌（base64），不下发给渲染层 */
   apifoxTokenEnc?: string
+  /** safeStorage 加密后的 CNB 访问令牌（base64），不下发给渲染层 */
+  cnbTokenEnc?: string
   tapd?: TapdPrefs
   multica?: MulticaPrefs
   report?: ReportPrefs
