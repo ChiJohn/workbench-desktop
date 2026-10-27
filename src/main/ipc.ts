@@ -231,7 +231,8 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.cnbSetToken, (token: string | null) => cnbToken.set(token))
   handle(Channels.cnbList, (projectId: string) => cnb.list(projectId))
   handle(Channels.cnbSummary, () => cnb.summary())
-  handle(Channels.cnbStart, (projectId: string, branch: string) => cnb.start(projectId, branch))
+  handle(Channels.cnbTriggers, (projectId: string, branch: string) => cnb.triggers(projectId, branch))
+  handle(Channels.cnbStart, (projectId: string, branch: string, event: string) => cnb.start(projectId, branch, event))
   handle(Channels.alignList, (key: string) => align.state(key))
   handle(Channels.alignAdd, (key: string, url: string) => align.add(key, url))
   handle(Channels.alignRefresh, (key: string, url: string) => align.refresh(key, url))
@@ -344,6 +345,7 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.knowledgeSearch, (query: string, project?: string) => knowledge.search(query, project))
   handle(Channels.knowledgeDraft, (req: KnowledgeDraftRequest) => knowledge.draft(req))
   handle(Channels.knowledgeSave, (req: KnowledgeSaveRequest) => knowledge.save(req))
+  handle(Channels.knowledgeIngest, (paths: string[]) => knowledge.ingest(paths))
 
   const assistant = new AssistantController(services, knowledge, (text) => send(Events.assistantProgress, text))
   handle(Channels.assistantSend, (text: string, context: AssistantContext) => assistant.send(text, context))

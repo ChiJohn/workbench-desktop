@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { keepSources, parseDraft, splitAnswer } from '../core/knowledge/answer'
+import { ingestDroppedFile, type InboxItem } from '../core/knowledge/inbox'
 import { KNOWLEDGE_DIR, QA_DIR, findDeposit, renderKnowledge, renderQa, saveNote, todayStamp, vaultFile } from '../core/knowledge/notes'
 import { askPrompt, distillPrompt } from '../core/knowledge/prompt'
 import { cleanSearch, parseSearchOutput, searchArgs, type SearchGroup } from '../core/knowledge/search'
@@ -12,6 +13,7 @@ import { ReportWriterRunner, resolveWriter } from '../core/report/writer'
 import { killTree } from '../core/runner/killTree'
 import type { KnowledgeAnswer, KnowledgeAskRequest, KnowledgeDraft, KnowledgeDraftRequest, KnowledgeSaveRequest } from '../shared/types'
 import type { Services } from './services'
+import { recognizeImage } from './paddleRecognize'
 
 const SEARCH_TIMEOUT_MS = 20_000
 const SEARCH_LIMIT = 30
@@ -161,6 +163,22 @@ export class KnowledgeController {
       if (e instanceof AppError && (e.code === 'REPORT_CANCELLED' || e.code === 'REPORT_WRITER_BUSY')) throw e
       return { title, body: material, project, task }
     }
+  }
+
+  async ingest(paths: string[]): Promise<InboxItem[]> {
+    const list = paths.map((item) => item.trim()).filter(Boolean)
+    if (!list.length) throw new AppError('INBOX_EMPTY', '没有文件')
+    const vault = this.prefs.vaultPath
+    const items: InboxItem[] = []
+    for (const source of list) {
+      try {
+        items.push(await ingestDroppedFile(vault, source, recognizeImage))
+      } catch (error) {
+        const message = error instanceof AppError ? error.message : error instanceof Error ? error.message : String(error)
+        items.push({ name: basename(source), category: '', title: '', notePath: '', filePath: '', error: message })
+      }
+    }
+    return items
   }
 
   async save(input: KnowledgeSaveRequest): Promise<string> {

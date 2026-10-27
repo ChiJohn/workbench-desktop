@@ -2054,6 +2054,26 @@ textarea.mono {
 
 /* ---------- 知识 ---------- */
 
+.inbox-drop {
+  border: 1px dashed var(--border-strong);
+  text-align: center;
+}
+
+.inbox-drop p {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+}
+
+.inbox-drop.over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.inbox-item {
+  margin-top: 8px;
+  text-align: left;
+}
+
 .knowledge-row {
   display: flex;
   gap: 8px;

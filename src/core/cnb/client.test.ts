@@ -66,11 +66,12 @@ describe('startCnbBuild', () => {
       slug: 'group/repo',
       token: 'secret',
       branch: 'release/1.2',
+      event: 'api_trigger_test',
       fetchImpl
     })
     expect(sent?.url).toBe('https://api.cnb.example.com/group/repo/-/build/start')
     expect(sent?.authorization).toBe('Bearer secret')
-    expect(JSON.parse(sent?.body ?? '{}')).toEqual({ branch: 'release/1.2', event: 'api_trigger', sync: 'false' })
+    expect(JSON.parse(sent?.body ?? '{}')).toEqual({ branch: 'release/1.2', event: 'api_trigger_test', sync: 'false' })
     expect(result).toEqual({ sn: 'cnb-9', url: 'https://cnb.example.com/group/repo/-/build/logs/cnb-9', message: 'ok' })
   })
 
@@ -81,5 +82,24 @@ describe('startCnbBuild', () => {
     await expect(
       startCnbBuild({ api: 'https://api.cnb.example.com', web: 'https://cnb.example.com', slug: 'g/r', token: 'x', branch: '-D', fetchImpl })
     ).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
+  })
+
+  it('sends a web trigger event from the button config', async () => {
+    let sent = ''
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      sent = typeof init?.body === 'string' ? init.body : ''
+      return new Response(JSON.stringify({ success: true, sn: 'cnb-2', message: 'ok' }))
+    }) as typeof fetch
+    await startCnbBuild({
+      api: 'https://api.cnb.example.com',
+      web: 'https://cnb.example.com',
+      slug: 'g/r',
+      token: 'x',
+      branch: 'test',
+      event: 'web_trigger_test_k8s_build',
+      env: { NAME_SPACE: 'saas-sit' },
+      fetchImpl
+    })
+    expect(JSON.parse(sent)).toMatchObject({ event: 'web_trigger_test_k8s_build', env: { NAME_SPACE: 'saas-sit' } })
   })
 })

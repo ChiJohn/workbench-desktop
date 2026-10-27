@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { Channels, Events, type WorkbenchApi } from '../shared/ipc'
 
 const invoke = (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args)
@@ -80,7 +80,8 @@ const api: WorkbenchApi = {
     setToken: (token) => invoke(Channels.cnbSetToken, token),
     list: (projectId) => invoke(Channels.cnbList, projectId),
     summary: () => invoke(Channels.cnbSummary),
-    start: (projectId, branch) => invoke(Channels.cnbStart, projectId, branch)
+    triggers: (projectId, branch) => invoke(Channels.cnbTriggers, projectId, branch),
+    start: (projectId, branch, event) => invoke(Channels.cnbStart, projectId, branch, event)
   },
   align: {
     list: (key) => invoke(Channels.alignList, key),
@@ -101,7 +102,8 @@ const api: WorkbenchApi = {
     cancel: () => invoke(Channels.knowledgeCancel),
     search: (query, project) => invoke(Channels.knowledgeSearch, query, project),
     draft: (req) => invoke(Channels.knowledgeDraft, req),
-    save: (req) => invoke(Channels.knowledgeSave, req)
+    save: (req) => invoke(Channels.knowledgeSave, req),
+    ingest: (paths) => invoke(Channels.knowledgeIngest, paths)
   },
   assistant: {
     send: (text, context) => invoke(Channels.assistantSend, text, context),
@@ -125,7 +127,8 @@ const api: WorkbenchApi = {
   },
   app: {
     openExternal: (url) => invoke(Channels.appOpenExternal, url),
-    pickFolder: (defaultPath) => invoke(Channels.appPickFolder, defaultPath)
+    pickFolder: (defaultPath) => invoke(Channels.appPickFolder, defaultPath),
+    pathForFile: (file) => webUtils.getPathForFile(file as File)
   },
   stickyNote: {
     read: () => invoke(Channels.stickyNoteRead),

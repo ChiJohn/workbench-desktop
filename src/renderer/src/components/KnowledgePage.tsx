@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { KnowledgeSearchGroup, Project } from '../../../shared/types'
+import type { InboxItem, KnowledgeSearchGroup, Project } from '../../../shared/types'
 import { api, unwrap } from '../api'
 import { useKnowledge } from '../stores/knowledge'
 import { toast } from '../stores/toast'
@@ -32,6 +32,29 @@ export function KnowledgePage({ projects }: { projects: Project[] }) {
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  const [over, setOver] = useState(false)
+  const [inboxBusy, setInboxBusy] = useState(false)
+  const [inbox, setInbox] = useState<InboxItem[]>([])
+
+  const takeFiles = async (files: File[]) => {
+    const paths = files.map((file) => api.app.pathForFile(file)).filter(Boolean)
+    if (!paths.length) {
+      toast.error(new Error('没有拿到文件路径'), '收件失败')
+      return
+    }
+    setInboxBusy(true)
+    try {
+      const items = await unwrap(api.knowledge.ingest(paths))
+      setInbox(items)
+      const saved = items.filter((item) => item.notePath)
+      if (saved.length) toast.success(`已收进 ${saved.length} 个`, saved.map((item) => item.notePath).join('、'))
+      const failed = items.filter((item) => item.error)
+      if (failed.length) toast.failure(failed.map((item) => `${item.name}：${item.error}`).join('\n'))
+    } catch (e) {
+      toast.error(e, '收件失败')
+    }
+    setInboxBusy(false)
+  }
 
   const save = async (kind: 'knowledge' | 'qa', extra?: { question?: string; sources?: string[] }) => {
     setSaving(true)
@@ -85,6 +108,41 @@ export function KnowledgePage({ projects }: { projects: Project[] }) {
       <div className="page-header">
         <h1>知识</h1>
       </div>
+      <section
+        className={`card inbox-drop${over ? ' over' : ''}`}
+        onDragOver={(event) => {
+          event.preventDefault()
+          setOver(true)
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+          setOver(false)
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          setOver(false)
+          if (!inboxBusy) void takeFiles([...event.dataTransfer.files])
+        }}
+      >
+        <h2>收件</h2>
+        <p>{inboxBusy ? '正在识别并归档，图片第一次会慢一些…' : '把图片或文件拖到这里。识别后按内容归类，原件和笔记一起写进知识库。'}</p>
+        {inbox.map((item) => (
+          <div key={`${item.name}-${item.notePath || item.error}`} className="inbox-item">
+            {item.error ? (
+              <p className="hint">
+                {item.name}：{item.error}
+              </p>
+            ) : (
+              <>
+                <button className="btn btn-ghost" onClick={() => openNote(item.notePath)}>
+                  {item.category} · {item.title}
+                </button>
+                {item.warning && <p className="hint">{item.warning}</p>}
+              </>
+            )}
+          </div>
+        ))}
+      </section>
       <section className="card">
         <h2>问答</h2>
         <div className="knowledge-row">

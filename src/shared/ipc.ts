@@ -15,6 +15,7 @@ import type {
   ProjectWriteRequest,
   CnbProjectBuilds,
   CnbBuildStart,
+  CnbTriggers,
   CnbSummaryItem,
   CloneProgress,
   CloneRequest,
@@ -31,6 +32,7 @@ import type {
   KnowledgeDraft,
   KnowledgeDraftRequest,
   KnowledgeSaveRequest,
+  InboxItem,
   KnowledgeSearchGroup,
   AssistantContext,
   AssistantTurn,
@@ -94,6 +96,7 @@ export const Channels = {
   cnbSetToken: 'cnb.setToken',
   cnbList: 'cnb.list',
   cnbSummary: 'cnb.summary',
+  cnbTriggers: 'cnb.triggers',
   cnbStart: 'cnb.start',
   alignList: 'align.list',
   alignAdd: 'align.add',
@@ -121,6 +124,7 @@ export const Channels = {
   knowledgeSearch: 'knowledge.search',
   knowledgeDraft: 'knowledge.draft',
   knowledgeSave: 'knowledge.save',
+  knowledgeIngest: 'knowledge.ingest',
   assistantSend: 'assistant.send',
   assistantConfirm: 'assistant.confirm',
   assistantCancel: 'assistant.cancel',
@@ -244,8 +248,10 @@ export interface WorkbenchApi {
     setToken(token: string | null): Promise<Result<TapdStatus>>
     list(projectId: string): Promise<Result<CnbProjectBuilds>>
     summary(): Promise<Result<CnbSummaryItem[]>>
-    /** 用 CNB 上该分支的最新提交触发流水线 */
-    start(projectId: string, branch: string): Promise<Result<CnbBuildStart>>
+    /** 当前分支在 .cnb/web_trigger.yml 里的按钮；没有这份文件时退回 .cnb.yml 的 api_trigger */
+    triggers(projectId: string, branch: string): Promise<Result<CnbTriggers>>
+    /** 按按钮名称触发。名称必须是当前分支匹配到的按钮 */
+    start(projectId: string, branch: string, name: string): Promise<Result<CnbBuildStart>>
   }
   align: {
     list(tapdKey: string): Promise<Result<AlignState>>
@@ -270,6 +276,7 @@ export interface WorkbenchApi {
     search(query: string, project?: string): Promise<Result<KnowledgeSearchGroup[]>>
     draft(req: KnowledgeDraftRequest): Promise<Result<KnowledgeDraft>>
     save(req: KnowledgeSaveRequest): Promise<Result<string>>
+    ingest(paths: string[]): Promise<Result<InboxItem[]>>
   }
   assistant: {
     send(text: string, context: AssistantContext): Promise<Result<AssistantTurn>>
@@ -296,6 +303,8 @@ export interface WorkbenchApi {
     openExternal(url: string): Promise<Result<null>>
     /** 取消时返回 null */
     pickFolder(defaultPath?: string): Promise<Result<string | null>>
+    /** 拖进来的文件在系统里的路径 */
+    pathForFile(file: unknown): string
   }
   stickyNote: {
     read(): Promise<Result<string>>

@@ -19,6 +19,7 @@ export const qk = {
   cnbStatus: ['cnbStatus'] as const,
   cnbSummary: ['cnbSummary'] as const,
   cnbList: (id: string) => ['cnbList', id] as const,
+  cnbTriggers: (id: string, branch: string) => ['cnbTriggers', id, branch] as const,
   align: (key: string) => ['align', key] as const,
   tapdBoard: ['tapdBoard'] as const,
   tapdDetail: (key: string) => ['tapdDetail', key] as const,

@@ -245,7 +245,7 @@ function CnbSettings({ status }: { status?: TapdStatus }) {
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
-        <small>读取记录需要构建历史只读权限，触发构建还需要 repo-cnb-trigger:rw。令牌加密保存，只在主进程使用</small>
+        <small>读取记录需要构建历史只读权限。触发构建还需要 repo-cnb-trigger:rw。按钮来自 origin 上的 .cnb/web_trigger.yml，只启用当前分支匹配的项。令牌加密保存，只在主进程使用</small>
       </label>
       <div className="button-row">
         <button className="btn btn-primary" disabled={busy || !token.trim()} onClick={() => void applyToken(token)}>

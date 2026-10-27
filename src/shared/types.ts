@@ -194,6 +194,24 @@ export interface CnbBuildStart {
   message: string
 }
 
+/** origin 上当前分支可以点的构建按钮，来自 .cnb/web_trigger.yml 或 .cnb.yml */
+export interface CnbTriggerOption {
+  name: string
+  event: string
+  description: string
+  env: Record<string, string>
+  /** 当前分支是否落在按钮的 reg 上 */
+  matched: boolean
+}
+
+export interface CnbTriggers {
+  options: CnbTriggerOption[]
+  /** web_trigger.yml 里的分支正则；没有这份文件时为空 */
+  patterns: string[]
+  /** not-cnb 不是 CNB 仓库；rev 本地还没有 origin 上的这个分支；file 两份配置都没有 */
+  missing: 'not-cnb' | 'rev' | 'file' | null
+}
+
 export interface CnbSummaryItem {
   projectId: string
   slug: string
@@ -325,6 +343,16 @@ export interface KnowledgeSaveRequest {
   sources?: string[]
   task?: string
   question?: string
+}
+
+export interface InboxItem {
+  name: string
+  category: string
+  title: string
+  notePath: string
+  filePath: string
+  warning?: string
+  error?: string
 }
 
 export interface KnowledgeDraftRequest {

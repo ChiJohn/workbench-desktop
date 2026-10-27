@@ -187,6 +187,25 @@ export class GitService {
     return parseLog(out)
   }
 
+  /** 读取某个提交上的文件。rev 不存在或该提交没有这个文件时用 missing 区分 */
+  async showFile(repoPath: string, rev: string, file: string): Promise<{ text: string } | { missing: 'rev' | 'file' }> {
+    if (!rev.trim() || rev.trim().startsWith('-') || rev.includes('..') || !file || file.startsWith('-')) {
+      throw new AppError('INVALID_BRANCH', `不能读取这个版本上的文件：「${rev}」`)
+    }
+    try {
+      await this.run(repoPath, ['rev-parse', '--verify', '--quiet', `${rev}^{commit}`], QUICK_TIMEOUT)
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'GIT_FAILED') return { missing: 'rev' }
+      throw error
+    }
+    try {
+      return { text: await this.run(repoPath, ['show', `${rev}:${file}`], QUICK_TIMEOUT) }
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'GIT_FAILED') return { missing: 'file' }
+      throw error
+    }
+  }
+
   async origin(repoPath: string): Promise<string | null> {
     try {
       const out = await this.run(repoPath, ['remote', 'get-url', 'origin'], QUICK_TIMEOUT)

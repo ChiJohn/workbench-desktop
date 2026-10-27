@@ -1,8 +1,9 @@
 import { mapLimit } from '../core/concurrency'
 import { listCnbBuilds, startCnbBuild } from '../core/cnb/client'
+import { apiTriggerEvents, webTriggerButtons } from '../core/cnb/config'
 import { parseCnbRemote } from '../core/cnb/slug'
 import { AppError } from '../core/result'
-import type { CnbBuildStart, CnbProjectBuilds, CnbSummaryItem, Project } from '../shared/types'
+import type { CnbBuildStart, CnbProjectBuilds, CnbSummaryItem, CnbTriggers, Project } from '../shared/types'
 import type { Services } from './services'
 
 const SUMMARY_LIMIT = 4
@@ -31,11 +32,35 @@ export class CnbController {
     return { slug: repo.slug, web: repo.web, builds }
   }
 
-  async start(projectId: string, branch: string): Promise<CnbBuildStart> {
+  async triggers(projectId: string, branch: string): Promise<CnbTriggers> {
+    const project = await this.services.registry.require(projectId)
+    const repo = await this.repoOf(project)
+    if (!repo) return { options: [], patterns: [], missing: 'not-cnb' }
+    const name = branch.trim()
+    const buttons = await this.services.git.showFile(project.repoPath, `origin/${name}`, '.cnb/web_trigger.yml')
+    if ('missing' in buttons && buttons.missing === 'rev') return { options: [], patterns: [], missing: 'rev' }
+    if ('text' in buttons) {
+      const parsed = webTriggerButtons(buttons.text, name)
+      return { options: parsed.options, patterns: parsed.patterns, missing: null }
+    }
+    const config = await this.services.git.showFile(project.repoPath, `origin/${name}`, '.cnb.yml')
+    if ('text' in config) {
+      return {
+        options: apiTriggerEvents(config.text, name).map((event) => ({ name: event, event, description: '', env: {}, matched: true })),
+        patterns: [],
+        missing: null
+      }
+    }
+    return { options: [], patterns: [], missing: config.missing === 'rev' ? 'rev' : 'file' }
+  }
+
+  async start(projectId: string, branch: string, name: string): Promise<CnbBuildStart> {
     const project = await this.services.registry.require(projectId)
     const repo = await this.repoOf(project)
     if (!repo) throw new AppError('CNB_NOT_REPO', '这个仓库的远程地址不是 CNB')
-    return startCnbBuild({ ...repo, token: this.token(), branch })
+    const chosen = (await this.triggers(projectId, branch)).options.find((item) => item.matched && item.name === name)
+    if (!chosen) throw new AppError('CNB_BUILD_DISABLED', '当前分支不能用这个构建按钮')
+    return startCnbBuild({ ...repo, token: this.token(), branch, event: chosen.event, env: chosen.env })
   }
 
   async summary(): Promise<CnbSummaryItem[]> {

@@ -56,13 +56,18 @@ export async function startCnbBuild(input: {
   slug: string
   token: string
   branch: string
+  event: string
+  env?: Record<string, string>
   fetchImpl?: typeof fetch
 }): Promise<CnbBuildStart> {
   const branch = assertBranch(input.branch)
+  const event = assertEvent(input.event)
+  const payload: { branch: string; event: string; sync: string; env?: Record<string, string> } = { branch, event, sync: 'false' }
+  if (input.env && Object.keys(input.env).length) payload.env = input.env
   const url = `${input.api}/${input.slug}/-/build/start`
   const response = await cnbFetch(url, input.token, input.fetchImpl, {
     method: 'POST',
-    body: JSON.stringify({ branch, event: 'api_trigger', sync: 'false' })
+    body: JSON.stringify(payload)
   }, '令牌没有触发构建的权限（repo-cnb-trigger:rw）')
   const body = (await response.json()) as { sn?: string; buildLogUrl?: string; message?: string; success?: boolean; data?: { sn?: string; buildLogUrl?: string; message?: string; success?: boolean } }
   const result = body.data && body.success === undefined && body.sn === undefined ? body.data : body
@@ -79,6 +84,14 @@ function assertBranch(branch: string): string {
   const name = branch.trim()
   if (!name || name.startsWith('-') || /[\s\u0000]/.test(name) || name.includes('..')) {
     throw new AppError('INVALID_BRANCH', `不能用这个分支触发构建：「${branch}」`)
+  }
+  return name
+}
+
+function assertEvent(event: string): string {
+  const name = event.trim()
+  if (!/^(?:api_trigger|web_trigger)(?:_[\w.-]+)?$/.test(name)) {
+    throw new AppError('INVALID_EVENT', `只能触发配置里的 api_trigger 或 web_trigger 事件：「${event}」`)
   }
   return name
 }
