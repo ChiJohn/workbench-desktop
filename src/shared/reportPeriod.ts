@@ -43,10 +43,10 @@ export function shiftPeriod(kind: ReportKind, range: ReportRange, delta: number)
 
 /** vault 相对路径 */
 export function reportPath(kind: ReportKind, range: ReportRange, name?: string): string {
-  if (kind === 'daily') return `Daily/${range.start}.md`
-  if (kind === 'weekly') return `周报/${range.start}~${range.end}.md`
+  if (kind === 'daily') return `汇报/日报/${range.start}.md`
+  if (kind === 'weekly') return `汇报/周报/${range.start}~${range.end}.md`
   const start = parseDate(range.start)
-  return `月报/${start.getFullYear()}年${start.getMonth() + 1}月_月度工作总结${name ? `_${name}` : ''}.md`
+  return `汇报/月报/${start.getFullYear()}年${start.getMonth() + 1}月_月度工作总结${name ? `_${name}` : ''}.md`
 }
 
 export function noteKey(kind: ReportKind, range: ReportRange): string {

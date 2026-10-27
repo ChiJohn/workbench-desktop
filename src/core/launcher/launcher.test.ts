@@ -9,7 +9,7 @@ const base = { repoPath: 'D:\\job\\code\\hyx-h5', terminal: 'wt' as const }
 
 describe('buildLaunchCommand', () => {
   it('builds commands for cursor, explorer and Windows Terminal', () => {
-    expect(buildLaunchCommand('cursor', base)).toBe('cursor "D:\\job\\code\\hyx-h5"')
+    expect(buildLaunchCommand('cursor', base)).toBe('cursor --classic "D:\\job\\code\\hyx-h5"')
     expect(buildLaunchCommand('explorer', base)).toBe('explorer "D:\\job\\code\\hyx-h5"')
     expect(buildLaunchCommand('terminal', base)).toBe('wt -d "D:\\job\\code\\hyx-h5"')
   })

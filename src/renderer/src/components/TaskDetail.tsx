@@ -1,10 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Prefs, Project, TapdBoard, TapdItem, TapdTransition } from '../../../shared/types'
 import { api, unwrap } from '../api'
+import { statusTone } from '../format'
 import { qk, refreshTapdBoard, useMulticaByTapd, useMulticaOverview, useSavePrefs, useTapdDetail } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
+import { AlignSection } from './AlignSection'
 import { DispatchDialog } from './DispatchDialog'
 import { KIND_LABELS, RepoSelect } from './TasksPage'
 
@@ -23,7 +25,22 @@ function DispatchButton({ item, repoId, prefs }: { item: TapdItem; repoId: strin
   const existing = useMulticaByTapd(item.key)
   const overview = useMulticaOverview()
   const openIssue = useUi((s) => s.openIssue)
+  const draft = useUi((s) => s.dispatchDraft)
   const [open, setOpen] = useState(false)
+  const [initialTitle, setInitialTitle] = useState<string | undefined>()
+
+  useEffect(() => {
+    if (draft?.tapdKey !== item.key) return
+    if (existing.data) {
+      toast.failure('这张单已经派过')
+      useUi.getState().clearDispatchDraft()
+      return
+    }
+    if (existing.isPending || !overview.data) return
+    setInitialTitle(draft.title)
+    setOpen(true)
+    useUi.getState().clearDispatchDraft()
+  }, [draft, item.key, existing.data, existing.isPending, overview.data])
 
   if (existing.data) {
     return (
@@ -44,7 +61,7 @@ function DispatchButton({ item, repoId, prefs }: { item: TapdItem; repoId: strin
         派给智能体
       </button>
       {open && overview.data && (
-        <DispatchDialog item={item} repoId={repoId} overview={overview.data} prefs={prefs} onClose={() => setOpen(false)} />
+        <DispatchDialog item={item} repoId={repoId} overview={overview.data} prefs={prefs} initialTitle={initialTitle} onClose={() => setOpen(false)} />
       )}
     </>
   )
@@ -133,7 +150,9 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
         <dt>项目</dt>
         <dd>{item.workspaceName}</dd>
         <dt>状态</dt>
-        <dd>{item.statusLabel}</dd>
+        <dd>
+          <span className={`task-status st-${statusTone(item.statusLabel)}`}>{item.statusLabel}</span>
+        </dd>
         <dt>迭代</dt>
         <dd>{item.iterationId ? (item.iterationName ?? item.iterationId) : '未规划迭代'}</dd>
         <dt>处理人</dt>
@@ -198,6 +217,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
 
       <h3>描述</h3>
       <div className="task-desc">{description || <span className="muted">（无描述）</span>}</div>
+      <AlignSection tapdKey={item.key} />
 
       {confirming && (
         <div className="modal-mask" onMouseDown={(e) => e.target === e.currentTarget && !busy && setConfirming(null)}>

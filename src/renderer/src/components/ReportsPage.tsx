@@ -5,12 +5,14 @@ import type { Prefs, ReportEntry, ReportKind, ReportMaterial, ReportSourceResult
 import { api, unwrap } from '../api'
 import { qk, useReportMaterial, useSavePrefs } from '../queries'
 import { useReport } from '../stores/report'
+import { useUi } from '../stores/ui'
 import { toast } from '../stores/toast'
 
 const KINDS: ReportKind[] = ['daily', 'weekly', 'monthly']
 export const WRITER_OPTIONS: { value: ReportWriter; label: string }[] = [
   { value: 'claude', label: 'Claude Code' },
-  { value: 'cursor', label: 'cursor-agent' }
+  { value: 'cursor', label: 'cursor-agent' },
+  { value: 'codex', label: 'Codex' }
 ]
 
 function Elapsed({ since }: { since: number }) {
@@ -85,6 +87,7 @@ function SourceBlock({ result }: { result: ReportSourceResult }) {
 export function ReportsPage({ prefs }: { prefs?: Prefs }) {
   const qc = useQueryClient()
   const { kind, ranges, excluded, drafts, generating, setKind, open, setRange, setDraft, generate } = useReport()
+  const reportDraft = useUi((s) => s.reportDraft)
   const range = ranges[kind]
   const key = noteKey(kind, range)
   const material = useReportMaterial(kind, range)
@@ -96,6 +99,11 @@ export function ReportsPage({ prefs }: { prefs?: Prefs }) {
 
   // 只在切换时间段或偏好首次加载时同步，保存补充说明引起的偏好更新不能覆盖正在输入的内容
   useEffect(() => setNotes(savedNotes), [key, Boolean(prefs)])
+  useEffect(() => {
+    if (!reportDraft || reportDraft.kind !== kind) return
+    if (reportDraft.notes !== undefined) setNotes(reportDraft.notes)
+    useUi.getState().clearReportDraft()
+  }, [reportDraft, kind])
 
   const data = material.data
   const existing = data?.existing ?? null

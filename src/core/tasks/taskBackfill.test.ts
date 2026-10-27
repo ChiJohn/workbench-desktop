@@ -58,10 +58,10 @@ describe('markdown helpers', () => {
 
 describe('backfillCard', () => {
   it('updates the card found by tapd_id', async () => {
-    mkdirSync(join(vault, 'Projects', '驴充充后台'), { recursive: true })
-    writeFileSync(join(vault, 'Projects', '驴充充后台', 'task-20261024-旧卡.md'), CARD)
+    mkdirSync(join(vault, '任务'), { recursive: true })
+    writeFileSync(join(vault, '任务', 'task-20261024-旧卡.md'), CARD)
     const rel = await backfillCard({ vaultPath: vault, project, issue, description: '描述', conclusion: '已完成，单测通过', tapd: { id: '1135364280001015493', kind: 'story' }, now })
-    expect(rel).toBe('Projects/驴充充后台/task-20261024-旧卡.md')
+    expect(rel).toBe('任务/task-20261024-旧卡.md')
     const md = readFileSync(join(vault, ...rel.split('/')), 'utf8')
     expect(md).toContain('status: done')
     expect(md).toContain('updated: 2026-10-24 10:00:00')
@@ -74,12 +74,12 @@ describe('backfillCard', () => {
     const first = await backfillCard({ vaultPath: vault, project, issue, description: '描述', conclusion: '一', tapd: null, now })
     const second = await backfillCard({ vaultPath: vault, project, issue, description: '描述', conclusion: '二', tapd: null, now })
     expect(second).toBe(first)
-    expect(readdirSync(join(vault, 'Projects', '驴充充后台'))).toHaveLength(1)
+    expect(readdirSync(join(vault, '任务'))).toHaveLength(1)
   })
 
   it('creates a done card when none exists', async () => {
     const rel = await backfillCard({ vaultPath: vault, project, issue, description: '## 仓库\n\n`x`', conclusion: null, tapd: { id: '42', kind: 'bug' }, now })
-    expect(rel).toBe('Projects/驴充充后台/task-20261024-充电订单列表：新增通联业务单号.md')
+    expect(rel).toBe('任务/task-20261024-充电订单列表：新增通联业务单号.md')
     const md = readFileSync(join(vault, ...rel.split('/')), 'utf8')
     expect(md).toContain("title: '充电订单列表：新增通联业务单号'")
     expect(md).toContain('type: bug')

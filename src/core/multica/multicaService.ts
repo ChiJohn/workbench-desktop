@@ -209,6 +209,27 @@ export class MulticaService {
     }
   }
 
+  /** 手动待办派单：不写 TAPD 关联 */
+  async createIssue(input: { title: string; description: string; projectId: string | null; agentId: string | null }): Promise<MulticaIssue> {
+    const meta = await this.loadMeta()
+    const raw = await this.cli.withTempFile(input.description, (name, cwd) =>
+      this.cli.json<RawIssue>(
+        [
+          'issue',
+          'create',
+          '--title',
+          input.title,
+          '--description-file',
+          name,
+          ...(input.projectId ? ['--project', input.projectId] : []),
+          ...(input.agentId ? ['--assignee-id', input.agentId] : [])
+        ],
+        { workspaceId: meta.workspace.id, cwd }
+      )
+    )
+    return this.toIssue(raw, this.context(meta))
+  }
+
   async comment(id: string, text: string): Promise<void> {
     const meta = await this.loadMeta()
     const wsId = meta.workspace.id

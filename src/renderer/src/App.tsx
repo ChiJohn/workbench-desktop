@@ -4,12 +4,17 @@ import { LogPanel } from './components/LogPanel'
 import { Overview } from './components/Overview'
 import { ProjectDetail } from './components/ProjectDetail'
 import { ProjectList } from './components/ProjectList'
+import { ProjectDialog } from './components/ProjectDialog'
+import { KnowledgePage } from './components/KnowledgePage'
 import { ReportsPage } from './components/ReportsPage'
 import { Settings } from './components/Settings'
 import { TasksPage } from './components/TasksPage'
+import { StickyNote } from './components/StickyNote'
+import { AssistantDock } from './components/AssistantDock'
 import { Toasts } from './components/Toasts'
 import { Toolbar } from './components/Toolbar'
-import { useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
+import { useApifoxStatus, useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
+import { DepositDialog } from './components/DepositDialog'
 import { useUi } from './stores/ui'
 import { useGlobalEvents } from './useGlobalEvents'
 
@@ -19,6 +24,7 @@ export function App() {
   const registry = useRegistry()
   const prefs = usePrefs()
   const tapdStatus = useTapdStatus()
+  const apifoxStatus = useApifoxStatus()
   const board = useTapdBoard(Boolean(tapdStatus.data?.hasToken))
   const projects = registry.data?.projects ?? []
   const status = useStatusAll(projects.length > 0)
@@ -33,6 +39,7 @@ export function App() {
           registry={registry.data}
           registryError={registry.error}
           tapdStatus={tapdStatus.data}
+          apifoxStatus={apifoxStatus.data}
           board={board.data}
         />
       )
@@ -42,9 +49,18 @@ export function App() {
     }
     if (view.kind === 'agents') return <AgentsPage overview={multica} projects={projects} />
     if (view.kind === 'reports') return <ReportsPage prefs={prefs.data} />
-    if (registry.isLoading) return <div className="page hint">读取仓库映射…</div>
-    if (registry.error) return <EmptyState message={registry.error.message} />
-    if (projects.length === 0) return <EmptyState message="仓库映射中没有解析到项目，请检查「已确认映射」表格" />
+    if (view.kind === 'knowledge') return <KnowledgePage projects={projects} />
+    if (registry.isLoading) return <div className="page hint">读取项目列表…</div>
+    if (registry.error) return <EmptyState message={`${registry.error.message}。可以在「设置」里用「初始化 vault」建一个新库`} />
+    if (projects.length === 0) {
+      return (
+        <EmptyState
+          message="还没有项目。点「新增项目」登记本机目录，或从远程仓库克隆"
+          actionLabel="新增项目"
+          onAction={() => useUi.getState().openProjectEditor({ mode: 'add' })}
+        />
+      )
+    }
     if (view.kind === 'project') {
       const project = projects.find((p) => p.id === view.id)
       if (project) return <ProjectDetail project={project} status={status.data} prefs={prefs.data} />
@@ -58,6 +74,10 @@ export function App() {
       <ProjectList projects={projects} status={status.data} prefs={prefs.data} />
       <main className="main">{renderMain()}</main>
       <LogPanel projects={projects} />
+      <DepositDialog projects={projects} />
+      <ProjectDialog projects={projects} codeRoot={prefs.data?.codeRoot} />
+      <StickyNote prefs={prefs.data} />
+      <AssistantDock />
       <Toasts />
     </div>
   )

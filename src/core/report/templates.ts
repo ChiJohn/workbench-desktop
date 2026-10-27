@@ -56,7 +56,7 @@ export const DEFAULT_TEMPLATES: Record<ReportKind, string> = {
 `
 }
 
-export const templatePath = (kind: ReportKind) => `Templates/汇报-${REPORT_KIND_LABELS[kind]}.md`
+export const templatePath = (kind: ReportKind) => `汇报/模板/汇报-${REPORT_KIND_LABELS[kind]}.md`
 
 /** 读取 vault 模板，不存在时写入默认模板 */
 export async function ensureTemplate(vaultPath: string, kind: ReportKind): Promise<string> {

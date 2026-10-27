@@ -14,7 +14,8 @@ const quote = (p: string) => `"${p}"`
 export function buildLaunchCommand(opener: OpenerKind, ctx: LaunchContext): string {
   switch (opener) {
     case 'cursor':
-      return `cursor ${quote(ctx.repoPath)}`
+      // Cursor 3 默认是 Glass。--classic 打开原来的 IDE 窗口。
+      return `cursor --classic ${quote(ctx.repoPath)}`
     case 'explorer':
       return `explorer ${quote(ctx.repoPath)}`
     case 'terminal':

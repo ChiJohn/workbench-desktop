@@ -12,7 +12,7 @@ const SECTION_HEADING = /^##\s+已确认映射\s*$/
 const ANY_SECTION_HEADING = /^#{1,2}\s/
 const SEPARATOR_ROW = /^\|[\s:|-]+\|$/
 
-const TYPE_MAP: Record<string, ProjectType> = {
+export const TYPE_MAP: Record<string, ProjectType> = {
   小程序应用: 'miniapp',
   H5应用: 'h5',
   后台前端仓库: 'admin',
@@ -21,7 +21,7 @@ const TYPE_MAP: Record<string, ProjectType> = {
 }
 
 /** 按未转义、且不在 `[[...]]` 内的 `|` 切分表格行 */
-function splitRow(line: string): string[] {
+export function splitRow(line: string): string[] {
   const cells: string[] = []
   let current = ''
   let linkDepth = 0
@@ -50,11 +50,15 @@ function splitRow(line: string): string[] {
   return cells.slice(1, -1)
 }
 
+export function projectLinkName(cell: string): string | null {
+  return parseWikilink(cell)?.name ?? null
+}
+
 function parseWikilink(cell: string): { target: string; name: string } | null {
   const m = cell.match(/\[\[([^\]]+?)(?:\\?\|[^\]]*)?\]\]/)
   if (!m) return null
   const target = m[1].trim()
-  const homepage = target.match(/Projects\/([^/]+)\/主页$/)
+  const homepage = target.match(/(?:Projects|项目)\/([^/]+)\/主页$/)
   const name = homepage ? homepage[1] : target.split('/').pop()!
   return { target, name }
 }
@@ -109,7 +113,8 @@ export function parseRepoMap(markdown: string): ParseResult {
       obsidianLink: link.target,
       repoPath,
       type: TYPE_MAP[typeCell.replace(/\s+/g, '')] ?? 'other',
-      note: noteCell
+      note: noteCell,
+      typeLabel: typeCell.trim()
     })
   }
 

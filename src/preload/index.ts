@@ -43,6 +43,14 @@ const api: WorkbenchApi = {
     buffer: (runId) => invoke(Channels.runnerBuffer, runId),
     dispose: (runId) => invoke(Channels.runnerDispose, runId)
   },
+  shell: {
+    open: (projectId, cols, rows) => invoke(Channels.shellOpen, projectId, cols, rows),
+    write: (id, data) => invoke(Channels.shellWrite, id, data),
+    resize: (id, cols, rows) => invoke(Channels.shellResize, id, cols, rows),
+    close: (id) => invoke(Channels.shellClose, id),
+    list: () => invoke(Channels.shellList),
+    buffer: (id) => invoke(Channels.shellBuffer, id)
+  },
   launcher: {
     open: (id, opener) => invoke(Channels.launcherOpen, id, opener)
   },
@@ -61,29 +69,81 @@ const api: WorkbenchApi = {
     createCard: (key, projectId) => invoke(Channels.tapdCreateCard, key, projectId),
     openCard: (relPath) => invoke(Channels.tapdOpenCard, relPath)
   },
+  apifox: {
+    status: () => invoke(Channels.apifoxStatus),
+    setToken: (token) => invoke(Channels.apifoxSetToken, token)
+  },
+  align: {
+    list: (key) => invoke(Channels.alignList, key),
+    add: (key, url) => invoke(Channels.alignAdd, key, url),
+    refresh: (key, url) => invoke(Channels.alignRefresh, key, url),
+    remove: (key, urlOrTarget) => invoke(Channels.alignRemove, key, urlOrTarget),
+    rename: (key, url, name) => invoke(Channels.alignRename, key, url, name),
+    mcpSnippet: (projectId) => invoke(Channels.alignMcpSnippet, projectId)
+  },
   report: {
     collect: (kind, range) => invoke(Channels.reportCollect, kind, range),
     generate: (req) => invoke(Channels.reportGenerate, req),
     cancel: () => invoke(Channels.reportCancel),
     save: (kind, range, content) => invoke(Channels.reportSave, kind, range, content)
   },
+  knowledge: {
+    ask: (req) => invoke(Channels.knowledgeAsk, req),
+    cancel: () => invoke(Channels.knowledgeCancel),
+    search: (query, project) => invoke(Channels.knowledgeSearch, query, project),
+    draft: (req) => invoke(Channels.knowledgeDraft, req),
+    save: (req) => invoke(Channels.knowledgeSave, req)
+  },
+  assistant: {
+    send: (text, context) => invoke(Channels.assistantSend, text, context),
+    confirm: () => invoke(Channels.assistantConfirm),
+    cancel: () => invoke(Channels.assistantCancel)
+  },
+  project: {
+    add: (req) => invoke(Channels.projectAdd, req),
+    update: (id, req) => invoke(Channels.projectUpdate, id, req),
+    remove: (id) => invoke(Channels.projectRemove, id),
+    detectType: (dir) => invoke(Channels.projectDetectType, dir),
+    clone: (req) => invoke(Channels.projectClone, req),
+    cancelClone: () => invoke(Channels.projectCancelClone)
+  },
   settings: {
     get: () => invoke(Channels.settingsGet),
     set: (patch) => invoke(Channels.settingsSet, patch)
   },
+  vault: {
+    init: (path) => invoke(Channels.vaultInit, path)
+  },
   app: {
-    openExternal: (url) => invoke(Channels.appOpenExternal, url)
+    openExternal: (url) => invoke(Channels.appOpenExternal, url),
+    pickFolder: (defaultPath) => invoke(Channels.appPickFolder, defaultPath)
+  },
+  stickyNote: {
+    read: () => invoke(Channels.stickyNoteRead),
+    write: (text) => invoke(Channels.stickyNoteWrite, text)
+  },
+  todo: {
+    list: () => invoke(Channels.todoList),
+    add: (text) => invoke(Channels.todoAdd, text),
+    toggle: (id) => invoke(Channels.todoToggle, id),
+    remove: (id) => invoke(Channels.todoRemove, id),
+    dispatch: (req) => invoke(Channels.todoDispatch, req)
   },
   on: {
     registryChanged: (cb) => subscribe(Events.registryChanged, cb),
     runnerOutput: (cb) => subscribe(Events.runnerOutput, cb),
     runnerExit: (cb) => subscribe(Events.runnerExit, cb),
     runnerStarted: (cb) => subscribe(Events.runnerStarted, cb),
+    shellOutput: (cb) => subscribe(Events.shellOutput, cb),
+    shellExit: (cb) => subscribe(Events.shellExit, cb),
     releaseChanged: (cb) => subscribe(Events.releaseChanged, cb),
     tapdUpdated: (cb) => subscribe(Events.tapdUpdated, cb),
     tapdFocus: (cb) => subscribe(Events.tapdFocus, cb),
     reportProgress: (cb) => subscribe(Events.reportProgress, cb),
-    reportOpen: (cb) => subscribe(Events.reportOpen, cb)
+    reportOpen: (cb) => subscribe(Events.reportOpen, cb),
+    knowledgeProgress: (cb) => subscribe(Events.knowledgeProgress, cb),
+    assistantProgress: (cb) => subscribe(Events.assistantProgress, cb),
+    projectCloneProgress: (cb) => subscribe(Events.projectCloneProgress, cb)
   }
 }
 

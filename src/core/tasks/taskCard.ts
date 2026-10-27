@@ -17,10 +17,18 @@ const dateTime = (d: Date) =>
 const yamlString = (s: string) => `'${s.replace(/'/g, "''")}'`
 const toPosix = (p: string) => p.split(sep).join('/')
 
-/** `Projects/驴充充后台/主页` → `Projects/驴充充后台` */
+export const TASKS_DIR = '任务'
+
+/** `项目/驴充充后台/主页` → `项目/驴充充后台` */
 export function projectFolder(obsidianLink: string): string {
   const parts = obsidianLink.split('/').filter(Boolean)
-  return parts.length > 1 ? parts.slice(0, -1).join('/') : 'Projects'
+  return parts.length > 1 ? parts.slice(0, -1).join('/') : '项目'
+}
+
+/** 链接最后一级目录名，用作任务卡 frontmatter 的 project */
+export function projectLabel(obsidianLink: string): string {
+  const parts = projectFolder(obsidianLink).split('/').filter(Boolean)
+  return parts[parts.length - 1] ?? projectFolder(obsidianLink)
 }
 
 export function cardFileName(title: string, now: Date, suffix = ''): string {
@@ -148,8 +156,7 @@ export async function backfillCard(input: {
     await writeFile(file, md, 'utf8')
     return existing
   }
-  const folder = projectFolder(project.obsidianLink)
-  return writeNewCard(vaultPath, folder, issue.title, now, (folderName) =>
+  return writeNewCard(vaultPath, projectLabel(project.obsidianLink), issue.title, now, (folderName) =>
     renderContent({
       title: issue.title,
       folderName,
@@ -167,13 +174,13 @@ export async function backfillCard(input: {
   )
 }
 
-async function writeNewCard(vaultPath: string, folder: string, title: string, now: Date, render: (folderName: string) => string): Promise<string> {
-  const dir = join(vaultPath, ...folder.split('/'))
+async function writeNewCard(vaultPath: string, projectName: string, title: string, now: Date, render: (folderName: string) => string): Promise<string> {
+  const dir = join(vaultPath, TASKS_DIR)
   await mkdir(dir, { recursive: true })
   let name = cardFileName(title, now)
   for (let n = 2; existsSync(join(dir, name)); n++) name = cardFileName(title, now, `-${n}`)
-  await writeFile(join(dir, name), render(folder.split('/').pop() ?? folder), { encoding: 'utf8', flag: 'wx' })
-  return `${folder}/${name}`
+  await writeFile(join(dir, name), render(projectName), { encoding: 'utf8', flag: 'wx' })
+  return `${TASKS_DIR}/${name}`
 }
 
 async function readHead(file: string): Promise<string> {
@@ -205,7 +212,7 @@ export async function findCard(vaultPath: string, tapdId: string): Promise<strin
 export async function findCardBy(vaultPath: string, field: string, value: string): Promise<string | null> {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pattern = new RegExp(`^${field}:\\s*['"]?${escaped}['"]?\\s*$`, 'm')
-  for await (const file of taskFiles(join(vaultPath, 'Projects'))) {
+  for await (const file of taskFiles(join(vaultPath, TASKS_DIR))) {
     if (pattern.test(await readHead(file))) return toPosix(relative(vaultPath, file))
   }
   return null
@@ -222,7 +229,7 @@ export async function createCard(input: {
   const existing = await findCard(vaultPath, item.id)
   if (existing) return existing
 
-  return writeNewCard(vaultPath, projectFolder(project.obsidianLink), item.title, now, (folderName) =>
+  return writeNewCard(vaultPath, projectLabel(project.obsidianLink), item.title, now, (folderName) =>
     renderCard({ item, description, folderName, repoPath: project.repoPath, now })
   )
 }

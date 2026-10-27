@@ -8,6 +8,16 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: AppErrorInfo
 
 export type ProjectType = 'miniapp' | 'h5' | 'admin' | 'pc' | 'cli' | 'other'
 
+/** 写回 项目.md 时使用的类型文字 */
+export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  miniapp: '小程序应用',
+  h5: 'H5 应用',
+  admin: '后台前端仓库',
+  pc: 'PC 前端仓库',
+  cli: 'CLI 仓库',
+  other: '其他'
+}
+
 export interface Project {
   /** 规范化后的仓库路径 */
   id: string
@@ -15,10 +25,33 @@ export interface Project {
   obsidianLink: string
   repoPath: string
   type: ProjectType
+  /** 表格里的类型原文；未识别的标签（如「桌面应用」）靠它保留 */
+  typeLabel?: string
   note: string
   /** 路径存在且是 git 仓库 */
   available: boolean
   unavailableReason?: string
+}
+
+export interface ProjectWriteRequest {
+  name: string
+  repoPath: string
+  type: ProjectType
+  note: string
+  /** 原类型单元格；类型没变时原样写回 */
+  typeLabel?: string
+  createHomepage?: boolean
+}
+
+export interface CloneRequest {
+  url: string
+  dest: string
+}
+
+export interface CloneProgress {
+  phase: 'receiving' | 'resolving' | 'other'
+  percent?: number
+  line: string
 }
 
 export interface SkippedRow {
@@ -82,6 +115,31 @@ export interface RunnerExitEvent {
   exitCode: number | null
 }
 
+export interface ShellSession {
+  id: string
+  title: string
+  cwd: string
+  pid: number
+  status: 'running' | 'exited'
+  exitCode: number | null
+}
+
+export interface ShellOutputEvent {
+  id: string
+  chunk: string
+  seq: number
+}
+
+export interface ShellExitEvent {
+  id: string
+  exitCode: number | null
+}
+
+export interface ShellBuffer {
+  text: string
+  seq: number
+}
+
 export type OpenerKind = 'cursor' | 'terminal' | 'explorer' | 'wechat'
 
 export interface RepoPrefs {
@@ -101,6 +159,20 @@ export interface ReleaseEnvOverride {
   hidden?: boolean
 }
 
+export interface TodoItem {
+  /** 正文 hash 前 8 位 + 行号 */
+  id: string
+  text: string
+  done: boolean
+  /** multica issue identifier，如 JIN-128 */
+  issue: string | null
+}
+
+export interface QuickLink {
+  name: string
+  url: string
+}
+
 export interface Prefs {
   vaultPath: string
   /** Electron accelerator 格式 */
@@ -112,14 +184,62 @@ export interface Prefs {
   wechatDevtoolsToken?: string
   /** safeStorage 加密后的 TAPD 个人令牌（base64），不下发给渲染层 */
   tapdTokenEnc?: string
+  /** safeStorage 加密后的 Apifox 访问令牌（base64），不下发给渲染层 */
+  apifoxTokenEnc?: string
   tapd?: TapdPrefs
   multica?: MulticaPrefs
   report?: ReportPrefs
+  knowledge?: KnowledgePrefs
+  /** 克隆远程仓库时的默认父目录 */
+  codeRoot?: string
+  /** 侧栏底部的快速入口，未设置时用默认列表 */
+  quickLinks?: QuickLink[]
+  /** 悬浮助手自己的引擎和模式，不影响汇报、知识的选择 */
+  assistant?: AssistantPrefs
   repos: Record<string, RepoPrefs>
 }
 
 export type ReportKind = 'daily' | 'weekly' | 'monthly'
-export type ReportWriter = 'claude' | 'cursor'
+export type ReportWriter = 'claude' | 'cursor' | 'codex'
+export type AssistantMode = 'ask' | 'act'
+
+export interface AssistantPrefs {
+  /** 默认 cursor-agent */
+  writer?: ReportWriter
+  /** 默认问答 */
+  mode?: AssistantMode
+}
+
+export interface AssistantContext {
+  view: string
+  projectId?: string | null
+  projectName?: string | null
+  taskKey?: string | null
+  issueId?: string | null
+}
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant'
+  text: string
+}
+
+export interface AssistantPending {
+  name: string
+  label: string
+  args: Record<string, string>
+  summary: string
+}
+
+export type AssistantClientAction =
+  | { type: 'dispatch'; tapdKey: string; title?: string }
+  | { type: 'report'; kind: ReportKind; notes?: string }
+  | { type: 'newProject'; name?: string; repoPath?: string }
+
+export interface AssistantTurn {
+  messages: AssistantMessage[]
+  pending: AssistantPending | null
+  clientAction: AssistantClientAction | null
+}
 
 export interface ReportPrefs {
   /** git 作者（匹配 user.name / email），默认 git config user.name */
@@ -129,6 +249,8 @@ export interface ReportPrefs {
   writer?: ReportWriter
   claudePath?: string
   cursorAgentPath?: string
+  /** 留空则在 PATH 里找 codex.exe / codex.cmd。汇报、知识、助手共用 */
+  codexPath?: string
   /** `类型:开始日期` → 手动补充；空字符串表示删除 */
   notes?: Record<string, string>
   reminders?: ReportReminderPrefs
@@ -140,6 +262,61 @@ export interface ReportReminderPrefs {
   daily?: string
   weekly?: string
   monthly?: string
+}
+
+export interface KnowledgePrefs {
+  /** 默认 cursor-agent，和汇报的写稿工具互不影响 */
+  writer?: ReportWriter
+  /** Obsidian.com 的路径，留空则用安装目录下的默认位置 */
+  obsidianCli?: string
+}
+
+export interface KnowledgeAskRequest {
+  question: string
+  project?: string
+}
+
+export interface KnowledgeAnswer {
+  answer: string
+  sources: string[]
+  dropped: number
+}
+
+export interface KnowledgeSaveRequest {
+  kind: 'knowledge' | 'qa'
+  title: string
+  project?: string
+  body: string
+  sources?: string[]
+  task?: string
+  question?: string
+}
+
+export interface KnowledgeDraftRequest {
+  task?: string
+  title?: string
+  material?: string
+  project?: string
+}
+
+export interface KnowledgeDraft {
+  existing?: string
+  title: string
+  body: string
+  project: string
+  task?: string
+}
+
+export interface KnowledgeSearchGroup {
+  file: string
+  snippets: string[]
+}
+
+export interface VaultInitResult {
+  path: string
+  /** vault 相对路径，目录以 / 结尾 */
+  created: string[]
+  skipped: string[]
 }
 
 /** 包含首尾的本地日期 YYYY-MM-DD */
@@ -277,6 +454,8 @@ export interface MulticaDispatchRequest {
   projectId: string | null
   /** null 表示暂不指派 */
   agentId: string | null
+  /** 这次不放进派单描述的设计稿 url、接口 target */
+  align?: { skipDesigns?: string[]; skipApis?: string[] }
 }
 
 export interface MulticaDispatchResult {
@@ -353,6 +532,13 @@ export interface TapdTransition {
   label: string
   /** 需要在 TAPD 中填写的必填字段；非空时不能在工作台流转 */
   blockedBy: string[]
+}
+
+export interface AlignState {
+  designs: { name: string; url: string }[]
+  apis: { title: string; target: string; path: string; url: string }[]
+  /** 描述里有、任务卡还没加入的链接 */
+  detected: { kind: 'figma' | 'apifox'; url: string; name: string }[]
 }
 
 export interface TapdDetail {

@@ -7,6 +7,9 @@ import { HotkeyManager } from './hotkey'
 import { createAppIcon } from './icon'
 import { registerIpc } from './ipc'
 import { ReportController } from './report'
+import { KnowledgeController } from './knowledge'
+import { ProjectAdmin } from '../core/registry/projectAdmin'
+import { RepoClone } from '../core/registry/repoClone'
 import { ReportReminder } from './reportReminder'
 import { createServices, ensureWechatCli } from './services'
 import { TapdPoller } from './tapdPoller'
@@ -131,7 +134,14 @@ function bootstrap(): void {
   })
 
   const report = new ReportController(services, (text) => send(Events.reportProgress, text))
-  registerIpc({ services, hotkey, poller, report, send })
+  const knowledge = new KnowledgeController(services, (text) => send(Events.knowledgeProgress, text))
+  const projects = new ProjectAdmin({
+    mapPath: () => services.registry.mapPath(),
+    vaultPath: () => services.prefs.get().vaultPath,
+    reload: () => services.registry.load()
+  })
+  const clones = new RepoClone()
+  registerIpc({ services, hotkey, poller, report, knowledge, projects, clones, send })
   poller.start()
   const reminder = new ReportReminder({
     prefs: () => services.prefs.get().report?.reminders,

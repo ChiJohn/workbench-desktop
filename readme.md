@@ -1,6 +1,6 @@
 # workbench-desktop
 
-个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `Projects/仓库映射.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行、常用 git 操作，小程序构建、预览与上传体验版，TAPD 任务中心，与 multica 智能体的派单、审查和回填，以及日报 / 周报 / 月报的素材汇总与 AI 写稿。
+个人前端开发工作台（Electron + React + TypeScript）。从 Obsidian vault 的 `项目.md` 读取项目列表，提供仓库状态总览、一键打开、脚本运行、常用 git 操作，小程序构建、预览与上传体验版，TAPD 任务中心，与 multica 智能体的派单、审查和回填，以及日报 / 周报 / 月报的素材汇总与 AI 写稿。
 
 ## 使用
 
@@ -9,6 +9,8 @@ pnpm install
 pnpm dev                     # 开发模式，F12 打开 DevTools
 pnpm build && pnpm preview   # 以构建产物运行
 ```
+
+首次使用：在「设置」填 vault 路径（可点「选择…」），点「初始化 vault」。会建好 `项目/`、`任务/`、`知识/`、`问答/`、`附件/`、`汇报/` 等目录，以及 `主页.md`、`项目.md` 和汇报模板；已有文件不会被覆盖，对已有 vault 再点一次只补缺的部分。然后点左侧「＋」登记本机目录，或从远程仓库克隆；也可以直接改 `项目.md` 的「已确认映射」表格。克隆用的父目录在「设置 → 代码根目录」。
 
 首次安装时 pnpm 不会自动下载 Electron 二进制，执行：
 
@@ -38,8 +40,11 @@ node node_modules/electron/install.js
 - 令牌首次启动时从 `~/.cursor/mcp.json`（`mcp-server-tapd` 的 `TAPD_ACCESS_TOKEN`）导入，也可在「设置 → TAPD」替换或清除；以系统加密（safeStorage）保存在 prefs 中，界面拿不到明文
 - 默认包含参与的全部项目（排除组织和示例空间），可在设置中取消勾选
 - 迭代分组标题处手动选择关联仓库，未规划迭代的单子在详情面板中单独选择；关联后可「去仓库」和「生成任务卡」
-- 任务卡写到 vault 中对应项目目录 `Projects/<项目>/task-YYYYMMDD-标题.md`，同一单子已有卡片时直接打开
+- 任务卡写到 vault 的 `任务/task-YYYYMMDD-标题.md`（frontmatter 记录所属项目），同一单子已有卡片时直接打开
 - 状态流转只列工作流允许的下一状态，有必填字段的流转需要到 TAPD 中操作；提交前二次确认
+- 详情里的「设计与接口」可挂 Figma 节点链接和 Apifox 接口。Figma 只记链接，派单时提示智能体用 Figma MCP 读取。Apifox 由工作台用加密令牌拉取 OpenAPI，契约写到 `项目/<项目名>/接口/`，同一接口可复用；描述里的链接只提示加入，不自动添加
+- 令牌在「设置 → Apifox」，不进契约、不进日志。「生成 Cursor MCP 配置」只复制不含令牌的片段，需要自己设置 `APIFOX_ACCESS_TOKEN` 并粘贴到 Cursor 的 mcp.json
+- 派单描述在仓库、来源、描述之后附上勾选的设计稿和接口契约正文。取消勾选只影响这一次
 - 每 15 分钟后台刷新一次，有新分配的单子时发系统通知，点击通知跳到该单子
 
 ### 智能体（multica）
@@ -60,9 +65,18 @@ node node_modules/electron/install.js
 - 时间段：日报当天，周报周六 ~ 周五，月报自然月；可改日期或按「‹ ›」平移
 - 素材（可逐条取消勾选）：映射仓库中本人的 git 提交（作者默认 `git config user.name`，同一 git 根目录按 hash 去重）、TAPD 时间段内修改过的本人单子（缺陷含本人修复的）、multica 时间段内完成的任务及智能体结论、vault 中时间段内更新的任务卡；另可写补充说明（按期保存）
 - 写稿：默认 Claude Code CLI（直接启动 `claude.exe`，stream-json 显示重试进度），可在页面或「设置 → 汇报」切换为 cursor-agent；5 分钟超时，可取消
-- 模板在 vault `Templates/汇报-日报.md`、`汇报-周报.md`、`汇报-月报.md`，首次生成时写入默认模板，之后按用户修改的模板写
-- 保存：日报写入 `Daily/YYYY-MM-DD.md` 的「## 日报」小节（其余内容不动），周报 `周报/开始~结束.md`，月报 `月报/YYYY年M月_月度工作总结_<姓名>.md`；已有报告时先显示已有内容，覆盖前确认
+- 模板在 vault `汇报/模板/汇报-日报.md`、`汇报-周报.md`、`汇报-月报.md`，首次生成时写入默认模板，之后按用户修改的模板写
+- 保存：日报写入 `汇报/日报/YYYY-MM-DD.md` 的「## 日报」小节（其余内容不动），周报 `汇报/周报/开始~结束.md`，月报 `汇报/月报/YYYY年M月_月度工作总结_<姓名>.md`；已有报告时先显示已有内容，覆盖前确认
 - 提醒：工作日 18:30 日报、周五 17:00 周报、月末最后一个工作日 17:00 月报，报告已存在则不提醒；时间和开关在「设置 → 汇报」
+
+### 知识
+
+工具栏「知识」页对着 vault 提问，并用 Obsidian CLI 做关键词搜索。
+
+- 问答默认用 cursor-agent，在 vault 里只读检索后回答，并核对来源路径；写稿工具在「设置 → 知识」里单独选，和汇报互不影响
+- 回答可存成 `问答/YYYY-MM-DD-标题.md`。速记可直接写入 `知识/`，或先让写稿工具收成要点再存
+- 智能体任务标为完成且回填了任务卡时，弹出沉淀草稿；同一张任务卡只沉淀一次
+- 快速搜索调用 `Obsidian.com search:context`，结果去掉汇报和附件，知识笔记排在前面
 
 ## 开发
 
@@ -71,4 +85,4 @@ pnpm test        # src/core 的单元与集成测试（会在临时目录创建�
 pnpm typecheck
 ```
 
-结构：`src/core` 为不依赖 Electron 的业务服务，`src/main` 注册 IPC、托盘与快捷键，`src/preload` 暴露 `window.api`，`src/renderer` 为 React 界面。设计文档见 vault 中 `Projects/workbench-desktop/`。
+结构：`src/core` 为不依赖 Electron 的业务服务，`src/main` 注册 IPC、托盘与快捷键，`src/preload` 暴露 `window.api`，`src/renderer` 为 React 界面。设计文档见 vault 中 `项目/workbench-desktop/`。

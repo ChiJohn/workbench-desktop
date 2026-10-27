@@ -63,7 +63,7 @@ describe('parseRepoMap edge cases', () => {
 
   it('falls back to the last path segment when the link is not a project homepage', () => {
     const { projects } = parseRepoMap(doc(['| [[Notes/Foo]] | `D:\\foo` | 前端仓库 | |']))
-    expect(projects[0]).toMatchObject({ name: 'Foo', type: 'other', note: '' })
+    expect(projects[0]).toMatchObject({ name: 'Foo', type: 'other', typeLabel: '前端仓库', note: '' })
   })
 
   it('skips rows without a repo path or link, with 1-based line numbers', () => {

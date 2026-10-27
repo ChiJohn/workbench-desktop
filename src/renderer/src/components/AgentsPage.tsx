@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import type { MulticaIssue, MulticaOverview, Project } from '../../../shared/types'
 import { api, ApiError, unwrap } from '../api'
 import { clockTime, localTime } from '../format'
-import { refreshMultica } from '../queries'
+import { refreshMultica, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { IssuePanel } from './IssuePanel'
@@ -19,10 +19,10 @@ export const ISSUE_STATUS_LABELS: Record<string, string> = {
 }
 
 const COLUMNS: { title: string; statuses: string[] }[] = [
+  { title: '待办', statuses: ['todo', 'backlog'] },
   { title: '进行中', statuses: ['in_progress'] },
   { title: '审核中', statuses: ['in_review'] },
-  { title: '阻塞', statuses: ['blocked'] },
-  { title: '待办', statuses: ['todo', 'backlog'] }
+  { title: '阻塞', statuses: ['blocked'] }
 ]
 
 export async function launchMultica(): Promise<void> {
@@ -84,8 +84,26 @@ export function AgentsPage({ overview, projects }: Props) {
   const setIssueId = useUi((s) => s.setIssueId)
   const [projectFilter, setProjectFilter] = useState('all')
   const [refreshing, setRefreshing] = useState(false)
+  const save = useSavePrefs()
+  const [switching, setSwitching] = useState(false)
 
   const data = overview.data
+
+  const switchWorkspace = (workspaceId: string) => {
+    if (workspaceId === data?.workspace.id || switching) return
+    setIssueId(null)
+    setProjectFilter('all')
+    setSwitching(true)
+    save.mutate(
+      { multica: { workspaceId } },
+      {
+        onSettled: async () => {
+          await refreshMultica(qc, true)
+          setSwitching(false)
+        }
+      }
+    )
+  }
   const issues = useMemo(
     () =>
       (data?.issues ?? []).filter(
@@ -104,7 +122,24 @@ export function AgentsPage({ overview, projects }: Props) {
     <div className="page tasks-page">
       <div className="page-header">
         <h1>智能体</h1>
-        {data && <span className="badge">{data.workspace.name}</span>}
+        {data && data.workspaces.length > 1 ? (
+          <select
+            className="badge workspace-select"
+            value={data.workspace.id}
+            disabled={switching}
+            title="切换 multica 工作区"
+            onChange={(e) => switchWorkspace(e.target.value)}
+          >
+            {data.workspaces.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          data && <span className="badge">{data.workspace.name}</span>
+        )}
+        {switching && <span className="hint workspace-switching">切换中…</span>}
         {data && (
           <span className={data.daemon?.running ? 'muted' : 'warn-text'}>
             守护进程：

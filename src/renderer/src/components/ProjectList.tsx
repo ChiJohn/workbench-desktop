@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import type { StatusMap } from '../../../shared/ipc'
 import type { Prefs, Project } from '../../../shared/types'
+import { DEFAULT_QUICK_LINKS } from '../../../shared/quickLinks'
+import { api } from '../api'
 import { healthOf, TYPE_LABELS, TYPE_ORDER } from '../format'
 import { openWith } from '../queries'
 import { useRuns } from '../stores/runs'
@@ -42,12 +44,17 @@ export function ProjectList({ projects, status, prefs }: Props) {
 
   return (
     <aside className="sidebar">
-      <input
-        className="search"
-        placeholder="搜索项目 / 路径"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="sidebar-head">
+        <input
+          className="search"
+          placeholder="搜索项目 / 路径"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button className="btn" type="button" title="新增项目" onClick={() => useUi.getState().openProjectEditor({ mode: 'add' })}>
+          ＋
+        </button>
+      </div>
       <div className="project-groups">
         {groups.map((g) => (
           <section key={g.key}>
@@ -68,6 +75,15 @@ export function ProjectList({ projects, status, prefs }: Props) {
           </section>
         ))}
         {groups.length === 0 && <p className="hint">没有匹配的项目</p>}
+      </div>
+      <div className="quick-links">
+        <h3 className="group-title">快速入口</h3>
+        {(prefs?.quickLinks ?? DEFAULT_QUICK_LINKS).map((link) => (
+          <button key={link.url} className="project-item quick-link" title={link.url} onClick={() => void api.app.openExternal(link.url)}>
+            <span className="project-name">{link.name}</span>
+            <span className="quick-link-arrow">↗</span>
+          </button>
+        ))}
       </div>
     </aside>
   )

@@ -6,7 +6,7 @@ import type { Project, RegistryResult } from '../../shared/types'
 import { AppError } from '../result'
 import { parseRepoMap } from './parseRepoMap'
 
-const MAP_FILE = '仓库映射.md'
+const MAP_FILE = '项目.md'
 
 /** 映射里的路径可能是 monorepo 中的子应用，需要向上查找 .git */
 function isInsideGitRepo(path: string): boolean {
@@ -39,7 +39,7 @@ export class RegistryService extends EventEmitter {
   }
 
   mapPath(): string {
-    return join(this.getVaultPath(), 'Projects', MAP_FILE)
+    return join(this.getVaultPath(), MAP_FILE)
   }
 
   async load(): Promise<RegistryResult> {
@@ -49,7 +49,7 @@ export class RegistryService extends EventEmitter {
       markdown = await readFile(sourcePath, 'utf8')
     } catch {
       this.cache = null
-      throw new AppError('MAP_NOT_FOUND', '找不到仓库映射文件，请在设置中检查 vault 路径', sourcePath)
+      throw new AppError('MAP_NOT_FOUND', '找不到项目.md，请在设置中检查 vault 路径', sourcePath)
     }
     const { projects, skipped } = parseRepoMap(markdown)
     this.cache = {
@@ -87,7 +87,7 @@ export class RegistryService extends EventEmitter {
 
   watch(): void {
     this.unwatch()
-    const dir = join(this.getVaultPath(), 'Projects')
+    const dir = this.getVaultPath()
     if (!existsSync(dir)) return
     this.watcher = watch(dir, (_event, filename) => {
       if (filename !== MAP_FILE) return

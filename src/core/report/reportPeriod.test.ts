@@ -30,9 +30,9 @@ describe('shiftPeriod', () => {
 
 describe('reportPath', () => {
   it('follows the vault naming of each kind', () => {
-    expect(reportPath('daily', { start: '2026-10-26', end: '2026-10-26' })).toBe('Daily/2026-10-26.md')
-    expect(reportPath('weekly', { start: '2026-10-17', end: '2026-10-23' })).toBe('周报/2026-10-17~2026-10-23.md')
-    expect(reportPath('monthly', { start: '2026-09-01', end: '2026-09-30' }, '陈志强')).toBe('月报/2026年9月_月度工作总结_陈志强.md')
-    expect(reportPath('monthly', { start: '2026-09-01', end: '2026-09-30' })).toBe('月报/2026年9月_月度工作总结.md')
+    expect(reportPath('daily', { start: '2026-10-26', end: '2026-10-26' })).toBe('汇报/日报/2026-10-26.md')
+    expect(reportPath('weekly', { start: '2026-10-17', end: '2026-10-23' })).toBe('汇报/周报/2026-10-17~2026-10-23.md')
+    expect(reportPath('monthly', { start: '2026-09-01', end: '2026-09-30' }, '陈志强')).toBe('汇报/月报/2026年9月_月度工作总结_陈志强.md')
+    expect(reportPath('monthly', { start: '2026-09-01', end: '2026-09-30' })).toBe('汇报/月报/2026年9月_月度工作总结.md')
   })
 })

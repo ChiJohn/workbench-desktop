@@ -4,6 +4,7 @@ import type { MulticaCommitRequest, MulticaIssue, Project } from '../../../share
 import { api, unwrap } from '../api'
 import { qk, refreshMultica, refreshStatus, useGitChanges, useGitDiff } from '../queries'
 import { toast } from '../stores/toast'
+import { useUi } from '../stores/ui'
 
 function DiffView({ text }: { text: string }) {
   return (
@@ -80,6 +81,7 @@ export function ReviewSection({ issue, repo }: { issue: MulticaIssue; repo: Proj
     try {
       const r = await unwrap(api.multica.complete(issue.id, commit))
       toast.success(r.commit ? `已提交 ${r.commit} 并标为完成` : '已标为完成', r.card ?? undefined)
+      if (r.card) useUi.getState().offerDeposit({ task: r.card, title: issue.title, project: repo.name })
       if (r.warning) toast.failure(r.warning)
       setCommitMsg(null)
       await afterChange()

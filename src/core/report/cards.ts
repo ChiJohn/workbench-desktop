@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import type { ReportEntry, ReportRange } from '../../shared/types'
 import { readFrontmatter, readSection } from '../markdown/sections'
-import { taskFiles } from '../tasks/taskCard'
+import { TASKS_DIR, taskFiles } from '../tasks/taskCard'
 
 const RESULT_MAX = 300
 const PLACEHOLDER = '待填写。'
@@ -12,7 +12,7 @@ const inRange = (day: string, range: ReportRange) => day >= range.start && day <
 /** vault 中 frontmatter `updated` 落在时间段内的任务卡，按更新时间倒序 */
 export async function collectCards(vaultPath: string, range: ReportRange): Promise<ReportEntry[]> {
   const entries: ReportEntry[] = []
-  for await (const file of taskFiles(join(vaultPath, 'Projects'))) {
+  for await (const file of taskFiles(join(vaultPath, TASKS_DIR))) {
     const md = await readFile(file, 'utf8')
     const fm = readFrontmatter(md)
     const updated = fm.updated ?? ''
@@ -28,7 +28,7 @@ export async function collectCards(vaultPath: string, range: ReportRange): Promi
     entries.push({
       id: `card:${rel}`,
       source: 'cards',
-      group: basename(dirname(file)),
+      group: fm.project || basename(dirname(file)),
       title: fm.title || basename(file, '.md'),
       detail: lines.join('\n'),
       time: updated.slice(0, 16)

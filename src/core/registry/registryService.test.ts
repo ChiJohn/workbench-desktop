@@ -10,14 +10,13 @@ let service: RegistryService
 
 const writeMap = (rows: string[]) =>
   writeFileSync(
-    join(vault, 'Projects', '仓库映射.md'),
+    join(vault, '项目.md'),
     ['## 已确认映射', '', '| 项目 | 仓库 | 类型 | 说明 |', '|---|---|---|---|', ...rows].join('\n')
   )
 
 beforeEach(() => {
   vault = mkdtempSync(join(tmpdir(), 'wb-vault-'))
   repos = mkdtempSync(join(tmpdir(), 'wb-repos-'))
-  mkdirSync(join(vault, 'Projects'))
   mkdirSync(join(repos, 'good', '.git'), { recursive: true })
   mkdirSync(join(repos, 'plain'))
   service = new RegistryService(() => vault, 50)
@@ -41,7 +40,7 @@ describe('RegistryService', () => {
       `| [[Projects/Gone/主页]] | \`${join(repos, 'gone')}\` | H5 应用 | |`
     ])
     const { projects, sourcePath } = await service.load()
-    expect(sourcePath).toBe(join(vault, 'Projects', '仓库映射.md'))
+    expect(sourcePath).toBe(join(vault, '项目.md'))
     expect(projects.map((p) => [p.name, p.available, p.unavailableReason])).toEqual([
       ['Good', true, undefined],
       ['Plain', false, '不在 git 仓库中'],

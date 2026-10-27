@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
-import type { MulticaPrefs, Prefs, PrefsPatch, ReportPrefs, TapdPrefs } from '../../shared/types'
+import { dirname, normalize } from 'node:path'
+import type { AssistantPrefs, MulticaPrefs, Prefs, PrefsPatch, ReportPrefs, TapdPrefs, KnowledgePrefs } from '../../shared/types'
 
 /** 映射按 key 合并，空字符串表示删除该映射 */
 function mergeMap(prev: Record<string, string> = {}, patch?: Record<string, string>): Record<string, string> {
@@ -20,6 +20,14 @@ function mergeTapd(prev: TapdPrefs, patch: TapdPrefs): TapdPrefs {
 
 function mergeMultica(prev: MulticaPrefs, patch: MulticaPrefs): MulticaPrefs {
   return { ...prev, ...patch, projectMap: mergeMap(prev.projectMap, patch.projectMap) }
+}
+
+function mergeKnowledge(prev: KnowledgePrefs, patch: KnowledgePrefs): KnowledgePrefs {
+  return { ...prev, ...patch }
+}
+
+function mergeAssistant(prev: AssistantPrefs, patch: AssistantPrefs): AssistantPrefs {
+  return { ...prev, ...patch }
 }
 
 function mergeReport(prev: ReportPrefs, patch: ReportPrefs): ReportPrefs {
@@ -53,7 +61,23 @@ export class PrefsStore {
     const tapd = patch.tapd ? mergeTapd(this.prefs.tapd ?? {}, patch.tapd) : this.prefs.tapd
     const multica = patch.multica ? mergeMultica(this.prefs.multica ?? {}, patch.multica) : this.prefs.multica
     const report = patch.report ? mergeReport(this.prefs.report ?? {}, patch.report) : this.prefs.report
-    this.prefs = { ...this.prefs, ...patch, repos, ...(tapd && { tapd }), ...(multica && { multica }), ...(report && { report }) }
+    const knowledge = patch.knowledge ? mergeKnowledge(this.prefs.knowledge ?? {}, patch.knowledge) : this.prefs.knowledge
+    const assistant = patch.assistant ? mergeAssistant(this.prefs.assistant ?? {}, patch.assistant) : this.prefs.assistant
+    const vaultPath = patch.vaultPath?.trim() ? normalize(patch.vaultPath.trim()) : (patch.vaultPath ?? this.prefs.vaultPath)
+    const codeRoot =
+      patch.codeRoot !== undefined ? (patch.codeRoot.trim() ? normalize(patch.codeRoot.trim()) : undefined) : this.prefs.codeRoot
+    this.prefs = {
+      ...this.prefs,
+      ...patch,
+      vaultPath,
+      codeRoot,
+      repos,
+      ...(tapd && { tapd }),
+      ...(multica && { multica }),
+      ...(report && { report }),
+      ...(knowledge && { knowledge }),
+      ...(assistant && { assistant })
+    }
     this.write()
     return this.prefs
   }

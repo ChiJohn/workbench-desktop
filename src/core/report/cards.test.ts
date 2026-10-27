@@ -7,12 +7,13 @@ import { collectCards } from './cards'
 let vault: string
 beforeEach(() => {
   vault = mkdtempSync(join(tmpdir(), 'wb-cards-'))
-  mkdirSync(join(vault, 'Projects', '驴充充后台'), { recursive: true })
+  mkdirSync(join(vault, '任务'), { recursive: true })
 })
 afterEach(() => rmSync(vault, { recursive: true, force: true }))
 
 const card = (title: string, status: string, updated: string, log: string[], result = '待填写。') => `---
 title: '${title}'
+project: 驴充充后台
 status: ${status}
 updated: ${updated}
 ---
@@ -30,7 +31,7 @@ ${result}
 
 describe('collectCards', () => {
   it('collects cards updated in the range with in-range log lines and the result of done cards', async () => {
-    const dir = join(vault, 'Projects', '驴充充后台')
+    const dir = join(vault, '任务')
     writeFileSync(
       join(dir, 'task-20261020-分账.md'),
       card('分账失败原因', 'done', '2026-10-22 18:00:00', ['2026-10-10 09:00:00：从 TAPD 生成。', '2026-10-22 18:00:00：multica JINB-1 由「前端开发」完成，已验收。'], '订单详情、分账单展示失败原因')
@@ -42,7 +43,7 @@ describe('collectCards', () => {
     const entries = await collectCards(vault, { start: '2026-10-17', end: '2026-10-23' })
     expect(entries).toEqual([
       {
-        id: 'card:Projects/驴充充后台/task-20261020-分账.md',
+        id: 'card:任务/task-20261020-分账.md',
         source: 'cards',
         group: '驴充充后台',
         title: '分账失败原因',
@@ -50,7 +51,7 @@ describe('collectCards', () => {
         time: '2026-10-22 18:00'
       },
       {
-        id: 'card:Projects/驴充充后台/task-20261021-进行中.md',
+        id: 'card:任务/task-20261021-进行中.md',
         source: 'cards',
         group: '驴充充后台',
         title: '进行中',
@@ -60,7 +61,7 @@ describe('collectCards', () => {
     ])
   })
 
-  it('returns nothing when the vault has no Projects folder', async () => {
+  it('returns nothing when the vault has no task folder', async () => {
     expect(await collectCards(join(vault, 'missing'), { start: '2026-10-17', end: '2026-10-23' })).toEqual([])
   })
 })

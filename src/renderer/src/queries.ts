@@ -15,6 +15,8 @@ export const qk = {
   scripts: (id: string) => ['scripts', id] as const,
   releaseInfo: (id: string) => ['releaseInfo', id] as const,
   tapdStatus: ['tapdStatus'] as const,
+  apifoxStatus: ['apifoxStatus'] as const,
+  align: (key: string) => ['align', key] as const,
   tapdBoard: ['tapdBoard'] as const,
   tapdDetail: (key: string) => ['tapdDetail', key] as const,
   multica: ['multica'] as const,
@@ -87,6 +89,10 @@ export function useReportMaterial(kind: ReportKind, range: ReportRange) {
 
 export function useTapdStatus() {
   return useQuery({ queryKey: qk.tapdStatus, queryFn: () => unwrap(api.tapd.status()) })
+}
+
+export function useApifoxStatus() {
+  return useQuery({ queryKey: qk.apifoxStatus, queryFn: () => unwrap(api.apifox.status()) })
 }
 
 export function useTapdBoard(enabled: boolean) {

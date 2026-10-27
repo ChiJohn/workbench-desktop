@@ -1,10 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import type { ReportWriter } from '../../shared/types'
 import { AppError } from '../result'
 
 export const WRITER_TIMEOUT_MS = 5 * 60_000
-export const WRITER_LABELS: Record<ReportWriter, string> = { claude: 'Claude', cursor: 'cursor-agent' }
+export const WRITER_LABELS: Record<ReportWriter, string> = { claude: 'Claude', cursor: 'cursor-agent', codex: 'Codex' }
 
 export interface WriterCommand {
   writer: ReportWriter
@@ -18,7 +18,7 @@ export interface WriterFs {
   list(dir: string): string[]
 }
 
-const CLAUDE_ARGS = ['-p', '--output-format', 'stream-json', '--verbose', '--tools', '', '--no-session-persistence']
+const claudeArgs = (tools: string) => ['-p', '--output-format', 'stream-json', '--verbose', '--tools', tools, '--no-session-persistence']
 const CLAUDE_EXE = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
 
 function findClaude(custom: string | undefined, env: NodeJS.ProcessEnv, fs: WriterFs): string | null {
@@ -52,8 +52,35 @@ function findCursorAgent(custom: string | undefined, env: NodeJS.ProcessEnv, fs:
   return latest ? join(versions, latest.name) : null
 }
 
+const CODEX_JS = join('node_modules', '@openai', 'codex', 'bin', 'codex.js')
+const CODEX_ARGS = ['exec', '--skip-git-repo-check', '--sandbox', 'read-only']
+
+/** npm 全局安装只有 codex.cmd。Windows 上直接 spawn .cmd 会得到 EINVAL，改跑同目录的 node.exe */
+function codexCommand(file: string, fs: WriterFs): { command: string; prefix: string[] } | null {
+  if (!fs.exists(file)) return null
+  const lower = file.toLowerCase()
+  if (lower.endsWith('.exe')) return { command: file, prefix: [] }
+  // codex.js 在 <prefix>/node_modules/@openai/codex/bin/；codex.cmd 就在 <prefix>
+  const root = lower.endsWith('.js') ? dirname(dirname(dirname(dirname(dirname(file))))) : dirname(file)
+  const js = lower.endsWith('.js') ? file : join(root, CODEX_JS)
+  const node = join(root, 'node.exe')
+  if (fs.exists(js) && fs.exists(node)) return { command: node, prefix: [js] }
+  return null
+}
+
+function findCodex(custom: string | undefined, env: NodeJS.ProcessEnv, fs: WriterFs): { command: string; prefix: string[] } | null {
+  if (custom) return codexCommand(custom.trim(), fs)
+  for (const dir of (env.PATH ?? env.Path ?? '').split(delimiter).filter(Boolean)) {
+    const exe = join(dir, 'codex.exe')
+    if (fs.exists(exe)) return { command: exe, prefix: [] }
+    const npm = codexCommand(join(dir, 'codex.cmd'), fs)
+    if (npm) return npm
+  }
+  return null
+}
+
 export function resolveWriter(
-  opts: { writer?: ReportWriter; claudePath?: string; cursorAgentPath?: string; workspace: string },
+  opts: { writer?: ReportWriter; claudePath?: string; cursorAgentPath?: string; codexPath?: string; workspace: string; profile?: 'report' | 'ask' },
   env: NodeJS.ProcessEnv,
   fs: WriterFs
 ): WriterCommand {
@@ -61,7 +88,12 @@ export function resolveWriter(
   if (writer === 'claude') {
     const command = findClaude(opts.claudePath?.trim(), env, fs)
     if (!command) throw new AppError('REPORT_WRITER_MISSING', '找不到 Claude Code CLI（claude.exe），可在设置「汇报」中指定路径')
-    return { writer, command, args: CLAUDE_ARGS, format: 'stream-json' }
+    return { writer, command, args: claudeArgs(opts.profile === 'ask' ? 'Read,Grep,Glob' : ''), format: 'stream-json' }
+  }
+  if (writer === 'codex') {
+    const found = findCodex(opts.codexPath, env, fs)
+    if (!found) throw new AppError('REPORT_WRITER_MISSING', '找不到 Codex CLI（codex.exe），可在设置「汇报」中指定路径')
+    return { writer, command: found.command, args: [...found.prefix, ...CODEX_ARGS], format: 'text' }
   }
   const dir = findCursorAgent(opts.cursorAgentPath?.trim(), env, fs)
   if (!dir) throw new AppError('REPORT_WRITER_MISSING', '找不到 cursor-agent，可在设置「汇报」中指定安装目录')
@@ -100,6 +132,7 @@ export interface WriterDeps {
   spawn(command: string, args: string[], cwd: string): ChildProcessWithoutNullStreams
   kill(pid: number): Promise<void>
   timeoutMs?: number
+  busyMessage?: string
 }
 
 /** 同一时间只跑一个写稿进程 */
@@ -113,7 +146,7 @@ export class ReportWriterRunner {
   }
 
   run(cmd: WriterCommand, prompt: string, cwd: string, onProgress: (text: string) => void): Promise<string> {
-    if (this.current) return Promise.reject(new AppError('REPORT_WRITER_BUSY', '已有报告在生成'))
+    if (this.current) return Promise.reject(new AppError('REPORT_WRITER_BUSY', this.deps.busyMessage ?? '已有报告在生成'))
     const label = WRITER_LABELS[cmd.writer]
     return new Promise<string>((resolve, reject) => {
       let child: ChildProcessWithoutNullStreams

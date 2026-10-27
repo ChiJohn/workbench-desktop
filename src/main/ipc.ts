@@ -1,7 +1,9 @@
-import { ipcMain, shell } from 'electron'
+import { app, dialog, ipcMain, shell } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename, resolve, sep } from 'node:path'
-import { backfillCard, createCard, findCard, findCardBy } from '../core/tasks/taskCard'
+import { AlignController, appendAlign } from './align'
+import { mcpSnippet } from '../core/align/mcpSnippet'
+import { createCard, findCard, findCardBy, backfillCard } from '../core/tasks/taskCard'
 import { mapLimit } from '../core/concurrency'
 import { desktopExe } from '../core/multica/multicaCli'
 import { dispatchDescription } from '../core/multica/multicaService'
@@ -9,6 +11,8 @@ import { AppError, wrap } from '../core/result'
 import { findMiniprogramRoot } from '../core/launcher/launcherService'
 import { buildReleaseInfo } from '../core/release/releaseInfo'
 import { readScripts } from '../core/runner/packageScripts'
+import { initVault } from '../core/vault/initVault'
+import { detectType } from '../core/registry/detectType'
 import { Channels, Events, type FetchAllMap, type StatusMap } from '../shared/ipc'
 import type {
   MulticaCommitRequest,
@@ -24,12 +28,26 @@ import type {
   ReportGenerateRequest,
   ReportKind,
   ReportRange,
+  KnowledgeAskRequest,
+  KnowledgeDraftRequest,
+  KnowledgeSaveRequest,
+  AssistantContext,
+  CloneRequest,
+  ProjectType,
+  ProjectWriteRequest,
   TapdDetail,
   TapdKind
 } from '../shared/types'
 import type { HotkeyManager } from './hotkey'
 import type { ReportController } from './report'
+import type { KnowledgeController } from './knowledge'
+import { AssistantController } from './assistant'
+import type { ProjectAdmin } from '../core/registry/projectAdmin'
+import type { RepoClone } from '../core/registry/repoClone'
 import type { Services } from './services'
+import { StickyNoteController } from './stickyNote'
+import { ShellHost } from './shell'
+import { TodoController } from './todo'
 import type { TapdPoller } from './tapdPoller'
 
 const STATUS_CONCURRENCY = 6
@@ -40,11 +58,14 @@ export interface IpcDeps {
   hotkey: HotkeyManager
   poller: TapdPoller
   report: ReportController
+  knowledge: KnowledgeController
+  projects: ProjectAdmin
+  clones: RepoClone
   send(channel: string, payload?: unknown): void
 }
 
 function publicPrefs(p: Prefs): Prefs {
-  const { tapdTokenEnc: _secret, ...rest } = p
+  const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, ...rest } = p
   return rest
 }
 
@@ -57,8 +78,21 @@ async function availableProjects({ registry }: Services): Promise<Project[]> {
   return projects.filter((p) => p.available)
 }
 
-export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps): void {
-  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, multica } = services
+export function registerIpc({ services, hotkey, poller, report, knowledge, projects, clones, send }: IpcDeps): void {
+  const { registry, git, runner, launcher, prefs, release, tapd, tapdToken, apifoxToken, multica } = services
+  const align = new AlignController({
+    vault: () => prefs.get().vaultPath,
+    token: () => apifoxToken.get(),
+    detail: (key) => tapd.detail(key),
+    project: async (item) => {
+      await registry.current().catch(() => null)
+      const tapdPrefs = prefs.get().tapd
+      const id = item.iterationId ? tapdPrefs?.iterationRepos?.[item.iterationId] : tapdPrefs?.itemRepos?.[item.key]
+      return id ? (registry.cachedProjects().find((p) => p.id === id) ?? null) : null
+    },
+    card: (id) => findCard(prefs.get().vaultPath, id),
+    createCard: (item, description, project) => createCard({ vaultPath: prefs.get().vaultPath, project, item, description })
+  })
   const repoPath = async (id: string) => (await registry.require(id)).repoPath
 
   handle(Channels.registryList, () => registry.load())
@@ -184,6 +218,15 @@ export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps)
     return null
   })
 
+  handle(Channels.apifoxStatus, () => apifoxToken.status())
+  handle(Channels.apifoxSetToken, (token: string | null) => apifoxToken.set(token))
+  handle(Channels.alignList, (key: string) => align.state(key))
+  handle(Channels.alignAdd, (key: string, url: string) => align.add(key, url))
+  handle(Channels.alignRefresh, (key: string, url: string) => align.refresh(key, url))
+  handle(Channels.alignRemove, (key: string, urlOrTarget: string) => align.remove(key, urlOrTarget))
+  handle(Channels.alignRename, (key: string, url: string, name: string) => align.rename(key, url, name))
+  handle(Channels.alignMcpSnippet, (projectId: string) => mcpSnippet(projectId))
+
   handle(Channels.gitChanges, async (id: string) => git.changes(await repoPath(id)))
   handle(Channels.gitDiff, async (id: string, path: string) => git.diff(await repoPath(id), path))
 
@@ -222,7 +265,12 @@ export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps)
     const tapdRepoId = item.iterationId ? tapdPrefs?.iterationRepos?.[item.iterationId] : tapdPrefs?.itemRepos?.[item.key]
     const repoId = (req.projectId ? (await multica.project(req.projectId))?.repoId : null) ?? tapdRepoId
     const repo = repoId ? registry.cachedProjects().find((p) => p.id === repoId) : undefined
-    const body = dispatchDescription({ repoPath: repo?.repoPath ?? null, kind: item.kind, url: item.url, body: description })
+    const aligned = await align.forDispatch(req.tapdKey, req.align)
+    const body = appendAlign(
+      dispatchDescription({ repoPath: repo?.repoPath ?? null, kind: item.kind, url: item.url, body: description }),
+      aligned.designs,
+      aligned.contracts
+    )
     const result = await multica.dispatch(req, body)
     if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
     return result
@@ -272,11 +320,47 @@ export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps)
   })
   handle(Channels.reportSave, (kind: ReportKind, range: ReportRange, content: string) => report.save(kind, range, content))
 
+  handle(Channels.knowledgeAsk, (req: KnowledgeAskRequest) => knowledge.ask(req))
+  handle(Channels.knowledgeCancel, () => {
+    knowledge.cancel()
+    return null
+  })
+  handle(Channels.knowledgeSearch, (query: string, project?: string) => knowledge.search(query, project))
+  handle(Channels.knowledgeDraft, (req: KnowledgeDraftRequest) => knowledge.draft(req))
+  handle(Channels.knowledgeSave, (req: KnowledgeSaveRequest) => knowledge.save(req))
+
+  const assistant = new AssistantController(services, knowledge, (text) => send(Events.assistantProgress, text))
+  handle(Channels.assistantSend, (text: string, context: AssistantContext) => assistant.send(text, context))
+  handle(Channels.assistantConfirm, () => assistant.confirm())
+  handle(Channels.assistantCancel, () => assistant.cancel())
+
+  handle(Channels.projectAdd, async (req: ProjectWriteRequest) => {
+    const project = await projects.add(req)
+    send(Events.registryChanged)
+    return project
+  })
+  handle(Channels.projectUpdate, async (id: string, req: ProjectWriteRequest) => {
+    const project = await projects.update(id, req)
+    send(Events.registryChanged)
+    return project
+  })
+  handle(Channels.projectRemove, async (id: string) => {
+    await projects.remove(id)
+    send(Events.registryChanged)
+    return null
+  })
+  handle(Channels.projectDetectType, (dir: string): Promise<ProjectType> => detectType(dir))
+  handle(Channels.projectClone, (req: CloneRequest) => clones.clone(req.url, req.dest, (progress) => send(Events.projectCloneProgress, progress)))
+  handle(Channels.projectCancelClone, () => {
+    void clones.cancel()
+    return null
+  })
+
   // 加密后的令牌只在主进程使用
   handle(Channels.settingsGet, () => publicPrefs(prefs.get()))
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
     const prev = prefs.get()
-    const { tapdTokenEnc: _ignored, ...safePatch } = patch
+    const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, ...safePatch } = patch
     if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
     const next = prefs.update(safePatch)
     if (safePatch.multica && ('profile' in safePatch.multica || 'cliPath' in safePatch.multica)) multica.reset()
@@ -289,16 +373,70 @@ export function registerIpc({ services, hotkey, poller, report, send }: IpcDeps)
     return publicPrefs(next)
   })
 
+  handle(Channels.vaultInit, async (path: string) => {
+    const result = await initVault(path)
+    prefs.update({ vaultPath: result.path })
+    registry.watch()
+    await registry.load().catch(() => undefined)
+    send(Events.registryChanged)
+    return result
+  })
+
+  handle(Channels.appPickFolder, async (defaultPath?: string) => {
+    const r = await dialog.showOpenDialog({ title: '选择 vault 文件夹', defaultPath: defaultPath || undefined, properties: ['openDirectory', 'createDirectory'] })
+    return r.canceled ? null : (r.filePaths[0] ?? null)
+  })
+
   handle(Channels.appOpenExternal, async (url: string) => {
     if (!/^https?:\/\//i.test(url)) throw new AppError('INVALID_URL', `只允许打开 http(s) 链接：${url}`)
     await shell.openExternal(url)
     return null
   })
 
+  const stickyNote = new StickyNoteController(services)
+  handle(Channels.stickyNoteRead, () => stickyNote.read())
+  handle(Channels.stickyNoteWrite, (text: string) => stickyNote.write(text))
+
+  const todo = new TodoController(services)
+  handle(Channels.todoList, () => todo.list())
+  handle(Channels.todoAdd, (text: string) => todo.add(text))
+  handle(Channels.todoToggle, (id: string) => todo.toggle(id))
+  handle(Channels.todoRemove, (id: string) => todo.remove(id))
+  handle(Channels.todoDispatch, async (req: { id: string; title: string; projectId: string | null; agentId: string | null }) => {
+    const items = await todo.list()
+    const item = items.find((i) => i.id === req.id)
+    if (!item) throw new AppError('TODO_NOT_FOUND', '没有这条待办')
+    if (item.issue) throw new AppError('TODO_ALREADY_DISPATCHED', `已派单 ${item.issue}`)
+    const title = req.title.trim() || item.text
+    const issue = await multica.createIssue({ title, description: item.text, projectId: req.projectId, agentId: req.agentId })
+    if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
+    return todo.markDispatched(req.id, issue.identifier)
+  })
+
   registry.on('changed', () => send(Events.registryChanged))
   runner.on('started', (session) => send(Events.runnerStarted, session))
   runner.on('output', (event) => send(Events.runnerOutput, event))
   runner.on('exit', (event) => send(Events.runnerExit, event))
+
+  const shells = new ShellHost(services)
+  handle(Channels.shellOpen, (projectId: string | null, cols: number, rows: number) => shells.open(projectId, cols, rows))
+  handle(Channels.shellWrite, (id: string, data: string) => {
+    shells.write(id, data)
+    return null
+  })
+  handle(Channels.shellResize, (id: string, cols: number, rows: number) => {
+    shells.resize(id, cols, rows)
+    return null
+  })
+  handle(Channels.shellClose, (id: string) => {
+    shells.close(id)
+    return null
+  })
+  handle(Channels.shellList, () => shells.list())
+  handle(Channels.shellBuffer, (id: string) => shells.buffer(id))
+  shells.on('output', (event) => send(Events.shellOutput, event))
+  shells.on('exit', (event) => send(Events.shellExit, event))
+  app.on('will-quit', () => shells.killAll())
   release.on('changed', (job: ReleaseJob) => {
     if (job.action === 'upload' && job.status === 'ok' && job.upload) {
       prefs.update({ repos: { [job.projectId]: { lastUploadVersion: job.upload.version } } })

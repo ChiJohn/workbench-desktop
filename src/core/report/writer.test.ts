@@ -28,10 +28,41 @@ describe('resolveWriter', () => {
     expect(cmd.args).toEqual([join(v('2026.10.22-27dcf5f'), 'index.js'), '-p', '--output-format', 'text', '--mode', 'ask', '--trust', '--workspace', 'T'])
   })
 
+  it('opens read tools for an ask-profile claude', () => {
+    const exe = join('D:\\nvm\\nodejs', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
+    const cmd = resolveWriter({ workspace: 'V', profile: 'ask' }, { PATH: 'D:\\nvm\\nodejs' }, fsOf([join('D:\\nvm\\nodejs', 'claude.cmd'), exe]))
+    expect(cmd.args).toEqual(['-p', '--output-format', 'stream-json', '--verbose', '--tools', 'Read,Grep,Glob', '--no-session-persistence'])
+  })
+
   it('reports a missing writer', () => {
     expect(() => resolveWriter({ workspace: 'T' }, { PATH: 'C:\\x' }, fsOf([]))).toThrow(expect.objectContaining({ code: 'REPORT_WRITER_MISSING' }))
     expect(() => resolveWriter({ writer: 'claude', claudePath: 'D:\\nope.exe', workspace: 'T' }, {}, fsOf([]))).toThrow(AppError)
     expect(() => resolveWriter({ writer: 'cursor', workspace: 'T' }, {}, fsOf([]))).toThrow(expect.objectContaining({ code: 'REPORT_WRITER_MISSING' }))
+    expect(() => resolveWriter({ writer: 'codex', workspace: 'T' }, { PATH: 'C:\\x' }, fsOf([]))).toThrow(expect.objectContaining({ code: 'REPORT_WRITER_MISSING' }))
+  })
+
+  it('starts Codex in a read-only sandbox and reads the prompt from stdin', () => {
+    const cmd = resolveWriter({ writer: 'codex', workspace: 'T' }, { PATH: 'D:\\bin' }, fsOf([join('D:\\bin', 'codex.exe')]))
+    expect(cmd).toEqual({ writer: 'codex', command: join('D:\\bin', 'codex.exe'), args: ['exec', '--skip-git-repo-check', '--sandbox', 'read-only'], format: 'text' })
+    expect(cmd.args.join(' ')).not.toContain('full-auto')
+    expect(cmd.args.join(' ')).not.toContain('workspace-write')
+  })
+
+  it('runs the npm Codex shim with node.exe instead of spawning codex.cmd', () => {
+    const dir = join('D:\\nvm', 'nodejs')
+    const js = join(dir, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+    const cmd = resolveWriter({ writer: 'codex', workspace: 'T' }, { PATH: dir }, fsOf([join(dir, 'codex.cmd'), join(dir, 'node.exe'), js]))
+    expect(cmd.command).toBe(join(dir, 'node.exe'))
+    expect(cmd.args).toEqual([js, 'exec', '--skip-git-repo-check', '--sandbox', 'read-only'])
+    expect(cmd.command.endsWith('.cmd')).toBe(false)
+  })
+
+  it('resolves a custom codex.js path back to the node prefix', () => {
+    const dir = join('D:\\nvm', 'nodejs')
+    const js = join(dir, 'node_modules', '@openai', 'codex', 'bin', 'codex.js')
+    const cmd = resolveWriter({ writer: 'codex', codexPath: js, workspace: 'T' }, {}, fsOf([js, join(dir, 'node.exe')]))
+    expect(cmd.command).toBe(join(dir, 'node.exe'))
+    expect(cmd.args[0]).toBe(js)
   })
 })
 

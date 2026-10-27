@@ -32,8 +32,9 @@ const project = { obsidianLink: 'Projects/驴充充后台/主页', repoPath: 'D:
 
 describe('task card', () => {
   it('derives the project folder from the obsidian link', () => {
+    expect(projectFolder('项目/驴充充后台/主页')).toBe('项目/驴充充后台')
     expect(projectFolder('Projects/驴充充后台/主页')).toBe('Projects/驴充充后台')
-    expect(projectFolder('主页')).toBe('Projects')
+    expect(projectFolder('主页')).toBe('项目')
   })
 
   it('builds a safe file name', () => {
@@ -55,15 +56,15 @@ describe('task card', () => {
 
   it('creates the card once and finds it by tapd id', async () => {
     const rel = await createCard({ vaultPath: vault, project, item, description: '', now })
-    expect(rel).toBe('Projects/驴充充后台/task-20261024-4. 充电订单列表新增通联业务单号-分账订单号.md')
+    expect(rel).toBe('任务/task-20261024-4. 充电订单列表新增通联业务单号-分账订单号.md')
     expect(readFileSync(join(vault, rel), 'utf8')).toContain('tapd_id:')
     expect(await findCard(vault, item.id)).toBe(rel)
     expect(await createCard({ vaultPath: vault, project, item, description: '', now })).toBe(rel)
   })
 
   it('adds a suffix when the file name is taken by another card', async () => {
-    mkdirSync(join(vault, 'Projects', '驴充充后台'), { recursive: true })
-    const taken = join(vault, 'Projects', '驴充充后台', cardFileName(item.title, now))
+    mkdirSync(join(vault, '任务'), { recursive: true })
+    const taken = join(vault, '任务', cardFileName(item.title, now))
     writeFileSync(taken, '---\ntitle: other\n---\n')
     const rel = await createCard({ vaultPath: vault, project, item, description: '', now })
     expect(rel.endsWith('-2.md')).toBe(true)

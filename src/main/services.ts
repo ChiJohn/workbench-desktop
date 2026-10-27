@@ -14,6 +14,7 @@ import { SeenStore } from '../core/tapd/seenStore'
 import { TapdClient } from '../core/tapd/tapdClient'
 import { TapdService } from '../core/tapd/tapdService'
 import { TapdTokenStore } from './tapdToken'
+import { ApifoxTokenStore } from './apifoxToken'
 import type { Prefs } from '../shared/types'
 
 export interface Services {
@@ -24,6 +25,7 @@ export interface Services {
   launcher: LauncherService
   release: ReleaseService
   tapdToken: TapdTokenStore
+  apifoxToken: ApifoxTokenStore
   tapd: TapdService
   tapdSeen: SeenStore
   multica: MulticaService
@@ -35,6 +37,7 @@ function defaultPrefs(): Prefs {
     hotkey: 'CommandOrControl+Alt+W',
     terminal: 'wt',
     wechatDevtoolsCli: WECHAT_CLI_CANDIDATES.find((p) => existsSync(p)),
+    codeRoot: existsSync('D:\\job\\code') ? 'D:\\job\\code' : undefined,
     repos: {}
   }
 }
@@ -43,6 +46,7 @@ export function createServices(): Services {
   const prefs = new PrefsStore(join(app.getPath('userData'), 'prefs.json'), defaultPrefs())
   const runner = new RunnerService()
   const tapdToken = new TapdTokenStore(prefs)
+  const apifoxToken = new ApifoxTokenStore(prefs)
   const tapd = new TapdService(new TapdClient({ token: () => tapdToken.get() }), {
     disabledWorkspaces: () => prefs.get().tapd?.disabledWorkspaces ?? []
   })
@@ -63,6 +67,7 @@ export function createServices(): Services {
     launcher: new LauncherService(),
     release: new ReleaseService(runner),
     tapdToken,
+    apifoxToken,
     tapd,
     tapdSeen: new SeenStore(join(app.getPath('userData'), 'tapd-seen.json')),
     multica

@@ -69,3 +69,7 @@ const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07/g
 export function stripAnsi(text: string): string {
   return text.replace(ANSI, '')
 }
+
+/** TAPD 状态文案 → 胶囊色调 */
+export { statusTone } from '../../core/tapd/statusTone'
+export type { StatusTone } from '../../core/tapd/statusTone'

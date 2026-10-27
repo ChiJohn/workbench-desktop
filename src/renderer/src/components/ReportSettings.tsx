@@ -68,7 +68,15 @@ export function ReportSettings({ prefs }: { prefs: ReportPrefs }) {
         placeholder="留空则用 %LOCALAPPDATA%\cursor-agent 的最新版本"
         onSave={(v) => patch({ cursorAgentPath: v || undefined })}
       />
-      <small className="hint">模板在 vault 的 Templates/汇报-日报.md、汇报-周报.md、汇报-月报.md，首次生成时自动创建，可直接修改</small>
+      <TextPref
+        label="Codex 路径（可选）"
+        mono
+        value={prefs.codexPath ?? ''}
+        placeholder="留空则在 PATH 里找 codex.exe"
+        hint="汇报、知识和悬浮助手共用。调用时只用只读沙箱"
+        onSave={(v) => patch({ codexPath: v || undefined })}
+      />
+      <small className="hint">模板在 vault 的汇报/模板/汇报-日报.md、汇报-周报.md、汇报-月报.md，首次生成时自动创建，可直接修改</small>
 
       <h3>提醒</h3>
       <label className="checkbox-row">

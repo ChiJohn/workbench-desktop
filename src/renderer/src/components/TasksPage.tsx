@@ -1,7 +1,7 @@
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import type { Prefs, Project, TapdBoard, TapdItem, TapdKind, TapdStatus } from '../../../shared/types'
-import { clockTime } from '../format'
+import { clockTime, statusTone } from '../format'
 import { refreshTapdBoard, useSavePrefs } from '../queries'
 import { useUi } from '../stores/ui'
 import { TaskDetail } from './TaskDetail'
@@ -214,7 +214,7 @@ export function TasksPage({ status, board, projects, prefs }: Props) {
                       <span className="task-title" title={item.title}>
                         {item.title}
                       </span>
-                      <span className="task-status">{item.statusLabel}</span>
+                      <span className={`task-status st-${statusTone(item.statusLabel)}`}>{item.statusLabel}</span>
                       <span className="muted mono task-time">{item.modified.slice(5, 16)}</span>
                     </div>
                   ))}

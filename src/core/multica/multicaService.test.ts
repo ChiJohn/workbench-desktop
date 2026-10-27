@@ -204,6 +204,19 @@ describe('MulticaService dispatch', () => {
     })
   })
 
+  it('creates a plain issue for a manual todo without tapd metadata', async () => {
+    const { s, calls } = service({
+      ...baseRoutes(),
+      'issue create': () => issue(4, 'todo')
+    })
+    const created = await s.createIssue({ title: '核对退款', description: '核对退款接口', projectId: null, agentId: 'a1' })
+    expect(created.identifier).toBe('JINB-4')
+    const create = calls.find((c) => c.args[1] === 'create')!
+    expect(create.args).toEqual(['issue', 'create', '--title', '核对退款', '--description-file', 'body.md', '--assignee-id', 'a1'])
+    expect(create.body).toBe('核对退款接口')
+    expect(calls.some((c) => c.args.includes('metadata'))).toBe(false)
+  })
+
   it('reports a warning when tapd_key cannot be written', async () => {
     const { s } = service({
       ...baseRoutes(),

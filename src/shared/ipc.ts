@@ -10,6 +10,11 @@ import type {
   OpenerKind,
   Prefs,
   PrefsPatch,
+  Project,
+  ProjectType,
+  ProjectWriteRequest,
+  CloneProgress,
+  CloneRequest,
   RegistryResult,
   ReleaseInfo,
   ReleaseJob,
@@ -18,16 +23,31 @@ import type {
   ReportKind,
   ReportMaterial,
   ReportRange,
+  KnowledgeAnswer,
+  KnowledgeAskRequest,
+  KnowledgeDraft,
+  KnowledgeDraftRequest,
+  KnowledgeSaveRequest,
+  KnowledgeSearchGroup,
+  AssistantContext,
+  AssistantTurn,
   RepoStatus,
   Result,
   RunnerExitEvent,
   RunnerOutputEvent,
   RunSession,
+  ShellBuffer,
+  ShellExitEvent,
+  ShellOutputEvent,
+  ShellSession,
   ScriptsInfo,
   TapdBoard,
   TapdDetail,
   TapdStatus,
-  WorktreeChange
+  AlignState,
+  VaultInitResult,
+  WorktreeChange,
+  TodoItem
 } from './types'
 
 export const Channels = {
@@ -46,6 +66,12 @@ export const Channels = {
   runnerList: 'runner.list',
   runnerBuffer: 'runner.buffer',
   runnerDispose: 'runner.dispose',
+  shellOpen: 'shell.open',
+  shellWrite: 'shell.write',
+  shellResize: 'shell.resize',
+  shellClose: 'shell.close',
+  shellList: 'shell.list',
+  shellBuffer: 'shell.buffer',
   launcherOpen: 'launcher.open',
   releaseInfo: 'release.info',
   releaseStart: 'release.start',
@@ -58,6 +84,14 @@ export const Channels = {
   tapdTransition: 'tapd.transition',
   tapdCreateCard: 'tapd.createCard',
   tapdOpenCard: 'tapd.openCard',
+  apifoxStatus: 'apifox.status',
+  apifoxSetToken: 'apifox.setToken',
+  alignList: 'align.list',
+  alignAdd: 'align.add',
+  alignRefresh: 'align.refresh',
+  alignRemove: 'align.remove',
+  alignRename: 'align.rename',
+  alignMcpSnippet: 'align.mcpSnippet',
   gitChanges: 'git.changes',
   gitDiff: 'git.diff',
   multicaOverview: 'multica.overview',
@@ -72,9 +106,32 @@ export const Channels = {
   reportGenerate: 'report.generate',
   reportCancel: 'report.cancel',
   reportSave: 'report.save',
+  knowledgeAsk: 'knowledge.ask',
+  knowledgeCancel: 'knowledge.cancel',
+  knowledgeSearch: 'knowledge.search',
+  knowledgeDraft: 'knowledge.draft',
+  knowledgeSave: 'knowledge.save',
+  assistantSend: 'assistant.send',
+  assistantConfirm: 'assistant.confirm',
+  assistantCancel: 'assistant.cancel',
+  projectAdd: 'project.add',
+  projectUpdate: 'project.update',
+  projectRemove: 'project.remove',
+  projectDetectType: 'project.detectType',
+  projectClone: 'project.clone',
+  projectCancelClone: 'project.cancelClone',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
-  appOpenExternal: 'app.openExternal'
+  vaultInit: 'vault.init',
+  appPickFolder: 'app.pickFolder',
+  appOpenExternal: 'app.openExternal',
+  stickyNoteRead: 'stickyNote.read',
+  stickyNoteWrite: 'stickyNote.write',
+  todoList: 'todo.list',
+  todoAdd: 'todo.add',
+  todoToggle: 'todo.toggle',
+  todoRemove: 'todo.remove',
+  todoDispatch: 'todo.dispatch'
 } as const
 
 export const Events = {
@@ -82,11 +139,16 @@ export const Events = {
   runnerOutput: 'runner:output',
   runnerExit: 'runner:exit',
   runnerStarted: 'runner:started',
+  shellOutput: 'shell:output',
+  shellExit: 'shell:exit',
   releaseChanged: 'release:changed',
   tapdUpdated: 'tapd:updated',
   tapdFocus: 'tapd:focus',
   reportProgress: 'report:progress',
-  reportOpen: 'report:open'
+  reportOpen: 'report:open',
+  knowledgeProgress: 'knowledge:progress',
+  assistantProgress: 'assistant:progress',
+  projectCloneProgress: 'project:cloneProgress'
 } as const
 
 export type StatusMap = Record<string, Result<RepoStatus>>
@@ -130,6 +192,15 @@ export interface WorkbenchApi {
     buffer(runId: string): Promise<Result<string>>
     dispose(runId: string): Promise<Result<null>>
   }
+  shell: {
+    /** projectId 为空时在用户目录打开 */
+    open(projectId: string | null, cols: number, rows: number): Promise<Result<ShellSession>>
+    write(id: string, data: string): Promise<Result<null>>
+    resize(id: string, cols: number, rows: number): Promise<Result<null>>
+    close(id: string): Promise<Result<null>>
+    list(): Promise<Result<ShellSession[]>>
+    buffer(id: string): Promise<Result<ShellBuffer>>
+  }
   launcher: {
     open(projectId: string, opener: OpenerKind): Promise<Result<null>>
   }
@@ -150,6 +221,19 @@ export interface WorkbenchApi {
     createCard(key: string, projectId: string): Promise<Result<string>>
     openCard(relPath: string): Promise<Result<null>>
   }
+  apifox: {
+    status(): Promise<Result<TapdStatus>>
+    setToken(token: string | null): Promise<Result<TapdStatus>>
+  }
+  align: {
+    list(tapdKey: string): Promise<Result<AlignState>>
+    add(tapdKey: string, url: string): Promise<Result<AlignState>>
+    refresh(tapdKey: string, url: string): Promise<Result<AlignState>>
+    remove(tapdKey: string, urlOrTarget: string): Promise<Result<AlignState>>
+    rename(tapdKey: string, url: string, name: string): Promise<Result<AlignState>>
+    /** 不含令牌的 Cursor MCP 配置片段 */
+    mcpSnippet(projectId: string): Promise<Result<string>>
+  }
   report: {
     collect(kind: ReportKind, range: ReportRange): Promise<Result<ReportMaterial>>
     /** 返回草稿正文；进度通过 on.reportProgress 推送 */
@@ -158,23 +242,66 @@ export interface WorkbenchApi {
     /** 返回 vault 相对路径 */
     save(kind: ReportKind, range: ReportRange, content: string): Promise<Result<string>>
   }
+  knowledge: {
+    ask(req: KnowledgeAskRequest): Promise<Result<KnowledgeAnswer>>
+    cancel(): Promise<Result<null>>
+    search(query: string, project?: string): Promise<Result<KnowledgeSearchGroup[]>>
+    draft(req: KnowledgeDraftRequest): Promise<Result<KnowledgeDraft>>
+    save(req: KnowledgeSaveRequest): Promise<Result<string>>
+  }
+  assistant: {
+    send(text: string, context: AssistantContext): Promise<Result<AssistantTurn>>
+    confirm(): Promise<Result<AssistantTurn>>
+    cancel(): Promise<Result<AssistantTurn>>
+  }
+  project: {
+    add(req: ProjectWriteRequest): Promise<Result<Project>>
+    update(id: string, req: ProjectWriteRequest): Promise<Result<Project>>
+    remove(id: string): Promise<Result<null>>
+    detectType(dir: string): Promise<Result<ProjectType>>
+    clone(req: CloneRequest): Promise<Result<null>>
+    cancelClone(): Promise<Result<null>>
+  }
   settings: {
     get(): Promise<Result<Prefs>>
     set(patch: PrefsPatch): Promise<Result<Prefs>>
   }
+  vault: {
+    /** 建好目录骨架，不覆盖已有文件，并把 vault 路径切到这里 */
+    init(path: string): Promise<Result<VaultInitResult>>
+  }
   app: {
     openExternal(url: string): Promise<Result<null>>
+    /** 取消时返回 null */
+    pickFolder(defaultPath?: string): Promise<Result<string | null>>
+  }
+  stickyNote: {
+    read(): Promise<Result<string>>
+    write(text: string): Promise<Result<null>>
+  }
+  todo: {
+    list(): Promise<Result<TodoItem[]>>
+    add(text: string): Promise<Result<TodoItem[]>>
+    toggle(id: string): Promise<Result<TodoItem[]>>
+    remove(id: string): Promise<Result<TodoItem[]>>
+    /** 返回派单后的列表 */
+    dispatch(req: { id: string; title: string; projectId: string | null; agentId: string | null }): Promise<Result<TodoItem[]>>
   }
   on: {
     registryChanged(cb: () => void): Unsubscribe
     runnerOutput(cb: (e: RunnerOutputEvent) => void): Unsubscribe
     runnerExit(cb: (e: RunnerExitEvent) => void): Unsubscribe
     runnerStarted(cb: (s: RunSession) => void): Unsubscribe
+    shellOutput(cb: (e: ShellOutputEvent) => void): Unsubscribe
+    shellExit(cb: (e: ShellExitEvent) => void): Unsubscribe
     releaseChanged(cb: (job: ReleaseJob) => void): Unsubscribe
     tapdUpdated(cb: (board: TapdBoard) => void): Unsubscribe
     tapdFocus(cb: (key: string) => void): Unsubscribe
     reportProgress(cb: (text: string) => void): Unsubscribe
     /** 点击汇报提醒 */
     reportOpen(cb: (kind: ReportKind) => void): Unsubscribe
+    knowledgeProgress(cb: (text: string) => void): Unsubscribe
+    assistantProgress(cb: (text: string) => void): Unsubscribe
+    projectCloneProgress(cb: (progress: CloneProgress) => void): Unsubscribe
   }
 }

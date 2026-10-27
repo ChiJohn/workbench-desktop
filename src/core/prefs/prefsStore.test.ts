@@ -78,6 +78,11 @@ describe('PrefsStore', () => {
     expect(next.report).toEqual({ writer: 'cursor', notes: { 'weekly:2026-10-17': '周会' }, reminders: { daily: '18:00', enabled: false } })
   })
 
+  it('normalizes the vault path', () => {
+    const store = new PrefsStore(file, defaults)
+    expect(store.update({ vaultPath: ' C:\\\\notes\\\\vault\\ ' }).vaultPath).toBe(join('C:\\notes\\vault\\'))
+  })
+
   it('persists updates to disk', () => {
     new PrefsStore(file, defaults).update({ wechatDevtoolsCli: 'C:\\cli.bat' })
     expect(JSON.parse(readFileSync(file, 'utf8')).wechatDevtoolsCli).toBe('C:\\cli.bat')

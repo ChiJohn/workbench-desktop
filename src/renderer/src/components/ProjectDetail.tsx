@@ -1,15 +1,19 @@
 import { useState, type FormEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { StatusMap } from '../../../shared/ipc'
 import type { OpenerKind, Prefs, Project } from '../../../shared/types'
+import { api, unwrap } from '../api'
 import { relativeTime, TYPE_LABELS } from '../format'
-import { openWith, useGitAction, useSavePrefs } from '../queries'
+import { openWith, qk, useGitAction, useSavePrefs } from '../queries'
+import { toast } from '../stores/toast'
+import { useUi } from '../stores/ui'
 import { BranchSwitcher } from './BranchSwitcher'
 import { ReleaseCard } from './ReleaseCard'
 import { RepoAgentCard } from './RepoAgentCard'
 import { ScriptList } from './ScriptList'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
-  cursor: 'Cursor',
+  cursor: 'Cursor IDE',
   terminal: '终端',
   explorer: '资源管理器',
   wechat: '微信开发者工具'
@@ -24,6 +28,9 @@ interface Props {
 export function ProjectDetail({ project, status, prefs }: Props) {
   const action = useGitAction()
   const savePrefs = useSavePrefs()
+  const qc = useQueryClient()
+  const setView = useUi((s) => s.setView)
+  const openEditor = useUi((s) => s.openProjectEditor)
   const [newBranch, setNewBranch] = useState<string | null>(null)
   const repoPrefs = prefs?.repos[project.id] ?? {}
   const r = status?.[project.id]
@@ -49,6 +56,27 @@ export function ProjectDetail({ project, status, prefs }: Props) {
         >
           {repoPrefs.pinned ? '★' : '☆'}
         </button>
+        <div className="header-actions">
+          <button className="btn" type="button" onClick={() => openEditor({ mode: 'edit', id: project.id })}>
+            编辑
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              if (!window.confirm(`移除「${project.name}」？\n只从 项目.md 删除这一行，代码和笔记都保留。`)) return
+              void unwrap(api.project.remove(project.id))
+                .then(async () => {
+                  await qc.invalidateQueries({ queryKey: qk.registry })
+                  setView({ kind: 'overview' })
+                  toast.success('已移除')
+                })
+                .catch((e) => toast.error(e, '移除失败'))
+            }}
+          >
+            移除
+          </button>
+        </div>
       </div>
       <div className="repo-path mono">{project.repoPath}</div>
       {project.note && <div className="hint">{project.note}</div>}
