@@ -1,11 +1,12 @@
 import { app, dialog, ipcMain, shell } from 'electron'
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { basename, resolve, sep } from 'node:path'
 import { AlignController, appendAlign } from './align'
 import { mcpSnippet } from '../core/align/mcpSnippet'
 import { createCard, findCard, findCardBy, backfillCard } from '../core/tasks/taskCard'
 import { mapLimit } from '../core/concurrency'
-import { desktopExe } from '../core/multica/multicaCli'
+import { desktopExe, multicaRuntimeEnv } from '../core/multica/multicaCli'
 import { dispatchDescription } from '../core/multica/multicaService'
 import { AppError, wrap } from '../core/result'
 import { remoteWebUrl } from '../shared/repoUrl'
@@ -324,8 +325,14 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.multicaLaunchDesktop, async () => {
     const exe = desktopExe(process.env)
     if (!existsSync(exe)) throw new AppError('MULTICA_DESKTOP_MISSING', '没有找到 multica 桌面端', exe)
-    const err = await shell.openPath(exe)
-    if (err) throw new AppError('MULTICA_DESKTOP_FAILED', `启动 multica 桌面端失败：${err}`)
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(exe, [], { detached: true, stdio: 'ignore', env: multicaRuntimeEnv(process.env) })
+      child.once('error', (error) => reject(new AppError('MULTICA_DESKTOP_FAILED', `启动 multica 桌面端失败：${error.message}`)))
+      child.once('spawn', () => {
+        child.unref()
+        resolve()
+      })
+    })
     return null
   })
 

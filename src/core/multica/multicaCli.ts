@@ -41,6 +41,13 @@ export function resolveProfile(input: { configured?: string; env: Env; listDir?:
   return listDir(join(input.env.USERPROFILE ?? '', '.multica', 'profiles')).find((name) => name.startsWith('desktop-'))
 }
 
+/** Go 的后量子握手包太大，这条链路上会被丢掉。CLI 和桌面端都要带上。 */
+export function multicaRuntimeEnv(env: Env): Env {
+  const current = env.GODEBUG ?? ''
+  if (/(^|,)tlsmlkem=/.test(current)) return env
+  return { ...env, GODEBUG: current ? `${current},tlsmlkem=0` : 'tlsmlkem=0' }
+}
+
 export interface MulticaCliOptions {
   resolveBin: () => string
   resolveProfile: () => string | undefined
@@ -63,7 +70,11 @@ export class MulticaCli {
     const timeoutMs = this.opts.timeoutMs ?? TIMEOUT_MS
     let r: ExecResult
     try {
-      r = await (this.opts.exec ?? execCommand)(this.opts.resolveBin(), full, { cwd: opts.cwd, timeoutMs, env: process.env })
+      r = await (this.opts.exec ?? execCommand)(this.opts.resolveBin(), full, {
+        cwd: opts.cwd,
+        timeoutMs,
+        env: multicaRuntimeEnv(process.env)
+      })
     } catch (e) {
       if (e instanceof AppError && e.code === 'COMMAND_NOT_FOUND') {
         throw new AppError('MULTICA_CLI_MISSING', '没有找到 multica CLI，请安装 multica 桌面端或在设置中指定路径')

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ExecOptions, ExecResult } from '../exec'
 import { AppError } from '../result'
-import { MulticaCli, resolveCliPath, resolveProfile } from './multicaCli'
+import { MulticaCli, resolveCliPath, resolveProfile, multicaRuntimeEnv } from './multicaCli'
 
 const ENV = { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local', USERPROFILE: 'C:\\Users\\me' }
 const DESKTOP_CLI = 'C:\\Users\\me\\AppData\\Local\\Programs\\@multicadesktop\\resources\\app.asar.unpacked\\resources\\bin\\multica.exe'
@@ -57,6 +57,14 @@ describe('resolveProfile', () => {
   })
 })
 
+describe('multicaRuntimeEnv', () => {
+  it('sets tlsmlkem=0 and keeps an existing GODEBUG list', () => {
+    expect(multicaRuntimeEnv({}).GODEBUG).toBe('tlsmlkem=0')
+    expect(multicaRuntimeEnv({ GODEBUG: 'http2debug=1' }).GODEBUG).toBe('http2debug=1,tlsmlkem=0')
+    expect(multicaRuntimeEnv({ GODEBUG: 'tlsmlkem=0' }).GODEBUG).toBe('tlsmlkem=0')
+  })
+})
+
 describe('MulticaCli.json', () => {
   it('passes profile, workspace and json output, and parses stdout', async () => {
     const f = fakeExec({ stdout: '[{"id":"1"}]' })
@@ -64,6 +72,7 @@ describe('MulticaCli.json', () => {
     expect(out).toEqual([{ id: '1' }])
     expect(f.calls[0].file).toBe('multica.exe')
     expect(f.calls[0].args).toEqual(['--profile', 'desktop-api.multica.ai', '--workspace-id', 'w1', 'issue', 'list', '--output', 'json'])
+    expect(f.calls[0].opts.env?.GODEBUG).toContain('tlsmlkem=0')
   })
 
   it('omits --profile when none is resolved', async () => {
