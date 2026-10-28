@@ -233,7 +233,10 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
                 {item.statusLabel} → <strong>{confirming.label}</strong>
               </dd>
             </dl>
-            <p className="hint">会直接修改 TAPD 上的单子状态。</p>
+            <p className="hint">
+              会直接修改 TAPD 上的单子状态。
+              {confirming.label === '已解决' ? '处理人会改为这张单的创建人。' : ''}
+            </p>
             <div className="button-row">
               <button autoFocus className="btn btn-primary" disabled={busy} onClick={() => transition(confirming)}>
                 {busy ? '提交中…' : '确认流转'}

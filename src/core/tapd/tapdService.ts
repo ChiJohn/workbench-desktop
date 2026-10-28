@@ -4,6 +4,7 @@ import { AppError, toErrorInfo } from '../result'
 import {
   hasOwner,
   htmlToText,
+  splitOwners,
   normalizeBug,
   normalizeStory,
   normalizeTask,
@@ -17,12 +18,13 @@ const WORKSPACE_CONCURRENCY = 3
 const ITERATION_CHUNK = 30
 const EXCLUDED_WORKSPACE_NAMES = new Set(['示例空间'])
 
-const ENTITY: Record<TapdKind, { path: string; entity: string; ownerParam: string; ownerField: string; fields: string }> = {
+const ENTITY: Record<TapdKind, { path: string; entity: string; ownerParam: string; ownerField: string; creatorField: string; fields: string }> = {
   story: {
     path: '/stories',
     entity: 'Story',
     ownerParam: 'owner',
     ownerField: 'owner',
+    creatorField: 'creator',
     fields: 'id,workspace_id,name,status,iteration_id,owner,priority,priority_label,modified,workitem_type_id'
   },
   bug: {
@@ -30,6 +32,7 @@ const ENTITY: Record<TapdKind, { path: string; entity: string; ownerParam: strin
     entity: 'Bug',
     ownerParam: 'current_owner',
     ownerField: 'current_owner',
+    creatorField: 'reporter',
     fields: 'id,workspace_id,title,status,iteration_id,current_owner,priority,priority_label,modified'
   },
   task: {
@@ -37,6 +40,7 @@ const ENTITY: Record<TapdKind, { path: string; entity: string; ownerParam: strin
     entity: 'Task',
     ownerParam: 'owner',
     ownerField: 'owner',
+    creatorField: 'creator',
     fields: 'id,workspace_id,name,status,iteration_id,owner,priority,priority_label,story_id,modified'
   }
 }
@@ -159,13 +163,34 @@ export class TapdService {
       const reason = target ? `需要在 TAPD 中填写：${target.blockedBy.join('、')}` : '工作流不允许流转到该状态'
       throw new AppError('TAPD_TRANSITION_NOT_ALLOWED', reason, `${key} → ${to}`)
     }
-    await this.client.post(ENTITY[item.kind].path, {
+    const entity = ENTITY[item.kind]
+    const body: Record<string, string> = {
       workspace_id: item.workspaceId,
       id: item.id,
       status: to,
       current_user: await this.currentUser()
+    }
+    let owners = item.owners
+    if (target.label === '已解决') {
+      const creator = await this.creatorOf(item)
+      if (!creator) throw new AppError('TAPD_NO_CREATOR', '这张单没有创建人，不能把处理人改过去')
+      body[entity.ownerField] = creator
+      owners = [creator]
+    }
+    await this.client.post(entity.path, body)
+    this.items.set(key, { ...item, status: to, statusLabel: target.label, owners })
+  }
+
+  /** 缺陷的创建人是 reporter，需求和任务是 creator */
+  private async creatorOf(item: TapdItem): Promise<string | null> {
+    const entity = ENTITY[item.kind]
+    const rows = await this.client.get<Record<string, Raw>[]>(entity.path, {
+      workspace_id: item.workspaceId,
+      id: item.id,
+      fields: `id,${entity.creatorField}`
     })
-    this.items.set(key, { ...item, status: to, statusLabel: target.label })
+    const raw = rows?.map((row) => row[entity.entity]).find((row) => String(row?.id) === item.id)
+    return splitOwners(raw?.[entity.creatorField])[0] ?? null
   }
 
   private clearMeta(): void {

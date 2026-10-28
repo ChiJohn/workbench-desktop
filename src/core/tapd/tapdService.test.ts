@@ -34,7 +34,7 @@ function fakeTapd(fail: string[] = []) {
           { Workspace: { id: '4', name: '示例空间', category: 'mini_project' } }
         ])
       case '/workflows/status_map':
-        return ok(params.system === 'story' ? { status_4: '未启动', status_6: '研发中', status_8: '已上线' } : { new: '新', closed: '已关闭' })
+        return ok(params.system === 'story' ? { status_4: '未启动', status_6: '研发中', status_8: '已上线' } : { new: '新', resolved: '已解决', closed: '已关闭' })
       case '/workflows/last_steps':
         return ok(params.system === 'story' ? { status_8: '已上线' } : { closed: '已关闭' })
       case '/iterations':
@@ -51,7 +51,7 @@ function fakeTapd(fail: string[] = []) {
       case '/bugs':
         return ok(
           wrap('Bug', [
-            { id: `${ws}11`, workspace_id: ws, title: '新缺陷', status: 'new', current_owner: `${ME};`, iteration_id: '0', modified: '2026-10-24 09:00:00' },
+            { id: `${ws}11`, workspace_id: ws, title: '新缺陷', status: 'new', current_owner: `${ME};`, reporter: ws === '1' ? '王测试;' : '', iteration_id: '0', modified: '2026-10-24 09:00:00' },
             { id: `${ws}12`, workspace_id: ws, title: '已关闭', status: 'closed', current_owner: `${ME};`, iteration_id: '0', modified: '2026-10-20 09:00:00' },
             { id: `${ws}13`, workspace_id: ws, title: '我修的已转测', status: 'closed', current_owner: '测试;', fixer: ME, iteration_id: '0', modified: '2026-10-19 09:00:00' }
           ])
@@ -64,6 +64,9 @@ function fakeTapd(fail: string[] = []) {
           ])
         )
       case '/workflows/all_transitions':
+        if (params.system === 'bug') {
+          return ok([{ StepPrevious: 'new', StepNext: 'resolved', Appendfield: [] }])
+        }
         return ok([
           { StepPrevious: 'status_4', StepNext: 'status_6', Appendfield: [{ FieldName: 'owner', Notnull: 'no' }] },
           { StepPrevious: 'status_4', StepNext: 'status_8', Appendfield: [{ FieldName: 'version', FieldLabel: '版本', Notnull: 'yes' }] },
@@ -185,6 +188,25 @@ describe('TapdService.detail and transition', () => {
     await expect(service.transition('story:101', 'status_8')).rejects.toMatchObject({ code: 'TAPD_TRANSITION_NOT_ALLOWED' })
     await expect(service.transition('story:101', 'status_99')).rejects.toMatchObject({ code: 'TAPD_TRANSITION_NOT_ALLOWED' })
     expect(tapd.calls.filter((c) => c.method === 'POST')).toHaveLength(1)
+  })
+
+  it('assigns a resolved bug back to its creator', async () => {
+    await service.board()
+    await service.transition('bug:111', 'resolved')
+    const post = tapd.calls.find((c) => c.method === 'POST')
+    expect(post?.params).toMatchObject({
+      workspace_id: '1',
+      id: '111',
+      status: 'resolved',
+      current_user: ME,
+      current_owner: '王测试'
+    })
+  })
+
+  it('refuses to resolve a bug that has no creator', async () => {
+    await service.board()
+    await expect(service.transition('bug:211', 'resolved')).rejects.toMatchObject({ code: 'TAPD_NO_CREATOR' })
+    expect(tapd.calls.filter((c) => c.method === 'POST')).toHaveLength(0)
   })
 
   it('requires the item to be on the board', async () => {
