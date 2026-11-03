@@ -60,10 +60,13 @@ export class UaViewerHost {
     key: string,
     opts: { graphDir: string | null; repoPath: string; missingHint?: string }
   ): Promise<string> {
-    if (!opts.graphDir || !existsSync(join(opts.graphDir, 'knowledge-graph.json'))) {
+    if (
+      !opts.graphDir ||
+      (!existsSync(join(opts.graphDir, 'knowledge-graph.json')) && !existsSync(join(opts.graphDir, 'domain-graph.json')))
+    ) {
       throw new AppError(
         'UA_GRAPH_MISSING',
-        opts.missingHint ?? '还没有找到 UA 图谱。请先点「在终端生成图谱」生成并收纳到 Vault。'
+        opts.missingHint ?? '还没有找到 UA 图谱。请先点「在终端生成图谱」或「生成业务流程图」并收纳到 Vault。'
       )
     }
 

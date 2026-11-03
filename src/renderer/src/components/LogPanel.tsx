@@ -146,6 +146,37 @@ export function LogPanel({ projects }: { projects: Project[] }) {
     return () => setTerminalSearchHandler(null)
   }, [])
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+      if (e.key !== '`' && e.code !== 'Backquote') return
+      e.preventDefault()
+
+      const shellOrder = useShells.getState().order
+      const lastShell = shellOrder[shellOrder.length - 1]
+      const ui = useUi.getState()
+
+      if (!lastShell) {
+        void openShell()
+        return
+      }
+      if (!ui.logOpen) {
+        ui.setLogTab({ kind: 'shell', id: lastShell })
+        ui.setLogOpen(true)
+        setTimeout(() => focusTerminal(lastShell), 0)
+        return
+      }
+      if (ui.logTab?.kind !== 'shell') {
+        ui.setLogTab({ kind: 'shell', id: lastShell })
+        setTimeout(() => focusTerminal(lastShell), 0)
+        return
+      }
+      ui.setLogOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  })
+
   const runSearch = (query: string, dir: 'next' | 'prev' = 'next') => {
     if (!selected) return
     setSearchResult(searchTerminal(selected.id, query, dir))
@@ -332,7 +363,7 @@ export function LogPanel({ projects }: { projects: Project[] }) {
           </select>
           <button
             className="btn btn-small"
-            title={projectId ? '在当前项目打开终端' : '在用户目录打开终端'}
+            title={projectId ? '在当前项目打开新终端（Ctrl+` 切换显示）' : '在用户目录打开新终端（Ctrl+` 切换显示）'}
             onClick={() => void openShell()}
           >
             ＋终端

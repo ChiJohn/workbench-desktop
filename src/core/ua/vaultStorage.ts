@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import type { Project, UaDataDirName, UaGraphLocation } from '../../shared/types'
+import { AppError } from '../result'
 import { projectFolder } from '../tasks/taskCard'
 import { findUaGraph } from './graphDir'
 
@@ -76,13 +77,19 @@ export function resolveProjectUaLocation(
     existsSync(join(project.repoPath, '.ua')) || existsSync(join(project.repoPath, '.understand-anything'))
   const vaultTarget = vaultPath && existsSync(vaultPath) ? projectVaultUaDir(vaultPath, project) : null
 
-  if (vaultTarget && existsSync(join(vaultTarget.dir, 'knowledge-graph.json'))) {
+  if (
+    vaultTarget &&
+    (existsSync(join(vaultTarget.dir, 'knowledge-graph.json')) || existsSync(join(vaultTarget.dir, 'domain-graph.json')))
+  ) {
+    const mainFile = existsSync(join(vaultTarget.dir, 'knowledge-graph.json'))
+      ? 'knowledge-graph.json'
+      : 'domain-graph.json'
     return {
       hasGraph: true,
       location: 'vault',
       dataDir: '.ua',
       graphDir: vaultTarget.dir,
-      graphRel: `${vaultTarget.rel}/knowledge-graph.json`,
+      graphRel: `${vaultTarget.rel}/${mainFile}`,
       vaultDir: vaultTarget.dir,
       vaultRel: vaultTarget.rel,
       hasRepoResidue
@@ -147,6 +154,20 @@ export function syncRepoUaToVault(
   repoPath: string,
   vaultUaDir: string
 ): { movedFiles: string[]; cleanedRepo: boolean } {
+  const hasGraphFile = (dir: string) =>
+    existsSync(join(dir, 'knowledge-graph.json')) || existsSync(join(dir, 'domain-graph.json'))
+
+  const repoHasGraph =
+    hasGraphFile(join(repoPath, '.ua')) || hasGraphFile(join(repoPath, '.understand-anything'))
+  const vaultHasGraph = hasGraphFile(vaultUaDir)
+
+  if (!repoHasGraph && !vaultHasGraph) {
+    throw new AppError(
+      'UA_SYNC_INCOMPLETE',
+      '仓库下的 .ua/ 尚未生成最终图谱（knowledge-graph.json 或 domain-graph.json）。若终端仍在分析请等待全部阶段跑完后再点收纳！'
+    )
+  }
+
   const movedFiles: string[] = []
   let cleanedRepo = false
 

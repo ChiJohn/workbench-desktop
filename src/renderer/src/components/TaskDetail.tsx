@@ -8,6 +8,7 @@ import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { AlignSection } from './AlignSection'
 import { DispatchDialog } from './DispatchDialog'
+import { TerminalDispatchDialog } from './TerminalDispatchDialog'
 import { KIND_LABELS, RepoSelect } from './TasksPage'
 
 interface Props {
@@ -92,6 +93,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
   const setView = useUi((s) => s.setView)
   const setTaskKey = useUi((s) => s.setTaskKey)
   const [confirming, setConfirming] = useState<TapdTransition | null>(null)
+  const [terminalDispatchOpen, setTerminalDispatchOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const head = (
@@ -214,7 +216,25 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
           </button>
         )}
         <DispatchButton item={item} description={description} repoId={repoId} prefs={prefs} />
+        <button
+          className="btn btn-primary"
+          disabled={projects.filter((p) => p.available).length === 0}
+          title="在底部终端拉起 Claude / Codex / cursor-agent 处理该任务"
+          onClick={() => setTerminalDispatchOpen(true)}
+        >
+          派给终端 AI
+        </button>
       </div>
+      {terminalDispatchOpen && (
+        <TerminalDispatchDialog
+          tapdKey={item.key}
+          initialTitle={item.title}
+          initialDescription={description}
+          defaultProjectId={repoId}
+          projects={projects}
+          onClose={() => setTerminalDispatchOpen(false)}
+        />
+      )}
 
       {transitions.length > 0 && (
         <div className="task-transitions">

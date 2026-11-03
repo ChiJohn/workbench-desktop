@@ -160,7 +160,11 @@ function readSourceFile(reqUrl: URL, graphDir: string, repoRoot: string): { stat
 }
 
 function serveGraphJson(res: ServerResponse, graphDir: string, repoRoot: string, fileName: string): void {
-  const candidate = join(graphDir, fileName)
+  let candidate = join(graphDir, fileName)
+  if (!existsSync(candidate) && fileName === 'knowledge-graph.json') {
+    const domainFallback = join(graphDir, 'domain-graph.json')
+    if (existsSync(domainFallback)) candidate = domainFallback
+  }
   if (existsSync(candidate)) {
     try {
       const raw = JSON.parse(readFileSync(candidate, 'utf8')) as {

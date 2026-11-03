@@ -11,6 +11,7 @@ describe('detectUaClaudePlugin', () => {
       expect(detectUaClaudePlugin(home)).toEqual({
         installed: false,
         claudeUnderstandCmd: '/understand-anything:understand --language zh',
+        claudeDomainCmd: '/understand-anything:understand-domain',
         claudeKnowledgeCmd: '/understand-anything:understand-knowledge .'
       })
     } finally {
@@ -27,6 +28,7 @@ describe('detectUaClaudePlugin', () => {
       expect(detectUaClaudePlugin(home)).toEqual({
         installed: true,
         claudeUnderstandCmd: '/understand --language zh',
+        claudeDomainCmd: '/understand-domain',
         claudeKnowledgeCmd: '/understand-knowledge .'
       })
     } finally {
@@ -52,6 +54,7 @@ describe('detectUaClaudePlugin', () => {
       expect(detectUaClaudePlugin(home)).toEqual({
         installed: true,
         claudeUnderstandCmd: '/understand-anything:understand --language zh',
+        claudeDomainCmd: '/understand-anything:understand-domain',
         claudeKnowledgeCmd: '/understand-anything:understand-knowledge .'
       })
     } finally {

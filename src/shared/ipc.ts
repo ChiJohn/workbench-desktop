@@ -56,6 +56,8 @@ import type {
   TapdBoard,
   TapdDetail,
   TapdStatus,
+  TerminalDispatchRequest,
+  TerminalDispatchResult,
   AlignState,
   VaultInitResult,
   WorktreeChange,
@@ -98,6 +100,7 @@ export const Channels = {
   tapdTransition: 'tapd.transition',
   tapdCreateCard: 'tapd.createCard',
   tapdOpenCard: 'tapd.openCard',
+  tapdDispatchTerminal: 'tapd.dispatchTerminal',
   apifoxStatus: 'apifox.status',
   apifoxSetToken: 'apifox.setToken',
   cnbStatus: 'cnb.status',
@@ -111,6 +114,7 @@ export const Channels = {
   uaStopDashboard: 'ua.stopDashboard',
   uaPrepareTerminal: 'ua.prepareTerminal',
   uaSyncToVault: 'ua.syncToVault',
+  uaExportDomainDoc: 'ua.exportDomainDoc',
   uaDiffImpact: 'ua.diffImpact',
   uaVaultStatus: 'ua.vaultStatus',
   uaOpenVaultDashboard: 'ua.openVaultDashboard',
@@ -269,6 +273,7 @@ export interface WorkbenchApi {
     /** 返回任务卡的 vault 相对路径 */
     createCard(key: string, projectId: string): Promise<Result<string>>
     openCard(relPath: string): Promise<Result<null>>
+    dispatchTerminal(req: TerminalDispatchRequest): Promise<Result<TerminalDispatchResult>>
   }
   apifox: {
     status(): Promise<Result<TapdStatus>>
@@ -288,8 +293,9 @@ export interface WorkbenchApi {
     graphStatus(projectId: string): Promise<Result<UaGraphStatus>>
     openDashboard(projectId: string): Promise<Result<UaDashboardOpen>>
     stopDashboard(projectId: string): Promise<Result<null>>
-    prepareTerminal(projectId: string): Promise<Result<UaTerminalPlan>>
+    prepareTerminal(projectId: string, mode?: 'code' | 'domain'): Promise<Result<UaTerminalPlan>>
     syncToVault(projectId: string): Promise<Result<UaSyncResult>>
+    exportDomainDoc(projectId: string): Promise<Result<string>>
     diffImpact(projectId: string, paths: string[]): Promise<Result<UaDiffImpact | null>>
     vaultStatus(): Promise<Result<UaGraphStatus>>
     openVaultDashboard(): Promise<Result<UaDashboardOpen>>

@@ -17,6 +17,7 @@ export function detectUaClaudePlugin(homeDir = homedir()): UaPluginInfo {
     return {
       installed: true,
       claudeUnderstandCmd: '/understand --language zh',
+      claudeDomainCmd: '/understand-domain',
       claudeKnowledgeCmd: '/understand-knowledge .'
     }
   }
@@ -38,6 +39,7 @@ export function detectUaClaudePlugin(homeDir = homedir()): UaPluginInfo {
             return {
               installed: true,
               claudeUnderstandCmd: '/understand-anything:understand --language zh',
+              claudeDomainCmd: '/understand-anything:understand-domain',
               claudeKnowledgeCmd: '/understand-anything:understand-knowledge .'
             }
           }
@@ -51,6 +53,7 @@ export function detectUaClaudePlugin(homeDir = homedir()): UaPluginInfo {
   return {
     installed: false,
     claudeUnderstandCmd: '/understand-anything:understand --language zh',
+    claudeDomainCmd: '/understand-anything:understand-domain',
     claudeKnowledgeCmd: '/understand-anything:understand-knowledge .'
   }
 }

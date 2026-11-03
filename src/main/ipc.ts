@@ -11,6 +11,10 @@ import { readVaultPrefsBackup, VAULT_PREFS_REL } from '../core/prefs/vaultBackup
 import { ReportWriterRunner, resolveWriter } from '../core/report/writer'
 import { killTree } from '../core/runner/killTree'
 import { createCard, findCard, findCardBy, backfillCard } from '../core/tasks/taskCard'
+import {
+  buildTerminalAiLaunchLine,
+  upsertVaultTerminalTaskCard
+} from '../core/tasks/terminalDispatch'
 import { mapLimit } from '../core/concurrency'
 import { desktopExe, multicaRuntimeEnv } from '../core/multica/multicaCli'
 import { dispatchDescription } from '../core/multica/multicaService'
@@ -45,7 +49,8 @@ import type {
   ProjectType,
   ProjectWriteRequest,
   TapdDetail,
-  TapdKind
+  TapdKind,
+  TerminalDispatchRequest
 } from '../shared/types'
 import type { HotkeyManager } from './hotkey'
 import type { ReportController } from './report'
@@ -56,6 +61,8 @@ import type { RepoClone } from '../core/registry/repoClone'
 import type { Services } from './services'
 import { CnbController } from './cnb'
 import { UaViewerHost } from './uaViewer'
+import { todayStamp } from '../core/knowledge/notes'
+import { exportDomainInteractionToVault } from '../core/ua/domainDoc'
 import { findUaGraph, readUaGraphSummary, readUaGraphSummaryFromDir } from '../core/ua/graphDir'
 import { analyzeUaDiffImpact, buildUaDispatchContext } from '../core/ua/graphContext'
 import { detectUaClaudePlugin } from '../core/ua/pluginStatus'
@@ -243,6 +250,53 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     )
     return null
   })
+  handle(Channels.tapdDispatchTerminal, async (req: TerminalDispatchRequest) => {
+    const project = await registry.require(req.projectId)
+    const vaultPath = requireVaultPath()
+    const title = req.title.trim()
+    if (!title) throw new AppError('INVALID_TITLE', '任务标题不能为空')
+
+    let tapdItem = undefined
+    let finalDesc = req.description ?? ''
+    let designs: { name: string; url: string }[] = []
+    let contracts: { title: string; path: string; body: string }[] = []
+
+    if (req.tapdKey) {
+      const detail = await tapd.detail(req.tapdKey)
+      tapdItem = detail.item
+      if (!finalDesc.trim()) finalDesc = detail.description
+      const aligned = await align.forDispatch(req.tapdKey, req.align)
+      designs = aligned.designs
+      contracts = aligned.contracts
+    }
+
+    const uaLoc = resolveProjectUaLocation(vaultPath, project)
+    const uaContext = uaLoc.graphDir
+      ? buildUaDispatchContext(project.repoPath, `${title}\n${finalDesc}`, 6, {
+          graphDir: uaLoc.graphDir,
+          graphRel: uaLoc.graphRel
+        })
+      : null
+
+    const { cardRel, cardFullPath } = await upsertVaultTerminalTaskCard({
+      vaultPath,
+      project,
+      writer: req.writer,
+      title,
+      description: finalDesc,
+      tapdItem,
+      designs,
+      contracts,
+      uaContext
+    })
+
+    const shellLine = buildTerminalAiLaunchLine({
+      writer: req.writer,
+      cardFullPath,
+      title
+    })
+    return { shellLine, promptFile: cardFullPath, card: cardRel }
+  })
 
   handle(Channels.apifoxStatus, () => apifoxToken.status())
   handle(Channels.apifoxSetToken, (token: string | null) => apifoxToken.set(token))
@@ -261,7 +315,15 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   }
   handle(Channels.uaGraphStatus, async (projectId: string) => {
     const project = await registry.require(projectId)
-    const loc = resolveProjectUaLocation(prefs.get().vaultPath, project)
+    const vaultPath = prefs.get().vaultPath
+    const loc = resolveProjectUaLocation(vaultPath, project)
+    if (loc.graphDir && vaultPath && existsSync(join(loc.graphDir, 'domain-graph.json'))) {
+      try {
+        exportDomainInteractionToVault({ vaultPath, project, graphDir: loc.graphDir, today: todayStamp() })
+      } catch {
+        // ignore
+      }
+    }
     return {
       hasGraph: loc.hasGraph,
       location: loc.location,
@@ -284,7 +346,7 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     await uaViewer.stop(projectId)
     return null
   })
-  handle(Channels.uaPrepareTerminal, async (projectId: string) => {
+  handle(Channels.uaPrepareTerminal, async (projectId: string, mode?: 'code' | 'domain') => {
     const vaultPath = requireVaultPath()
     const project = await registry.require(projectId)
     const target = projectVaultUaDir(vaultPath, project)
@@ -292,8 +354,9 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     stageVaultUaToRepo(target.dir, project.repoPath)
     const plugin = detectUaClaudePlugin()
     const helperPath = ensureUaSyncHelper()
+    const claudeCmd = mode === 'domain' ? plugin.claudeDomainCmd : plugin.claudeUnderstandCmd
     const shellLine = buildUaTerminalLine({
-      claudeCmd: plugin.claudeUnderstandCmd,
+      claudeCmd,
       helperPath,
       repoPath: project.repoPath,
       vaultUaDir: target.dir
@@ -306,7 +369,34 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     const target = projectVaultUaDir(vaultPath, project)
     if (!target) throw new AppError('VAULT_MISSING', '无法解析项目在 Vault 中的目录')
     const { movedFiles, cleanedRepo } = syncRepoUaToVault(project.repoPath, target.dir)
+    if (existsSync(join(target.dir, 'domain-graph.json'))) {
+      try {
+        exportDomainInteractionToVault({ vaultPath, project, graphDir: target.dir, today: todayStamp() })
+      } catch {
+        // ignore doc export error during sync
+      }
+    }
     return { vaultRel: target.rel, movedFiles, cleanedRepo }
+  })
+  handle(Channels.uaExportDomainDoc, async (projectId: string) => {
+    const vaultPath = requireVaultPath()
+    const project = await registry.require(projectId)
+    const loc = resolveProjectUaLocation(vaultPath, project)
+    if (!loc.graphDir) {
+      throw new AppError(
+        'UA_DOMAIN_MISSING',
+        '还没有生成业务域图谱。请先点「生成业务流程图」在终端运行 /understand-domain。'
+      )
+    }
+    const res = exportDomainInteractionToVault({
+      vaultPath,
+      project,
+      graphDir: loc.graphDir,
+      today: todayStamp()
+    })
+    await shell.openPath(res.htmlFullPath)
+    shell.showItemInFolder(res.htmlFullPath)
+    return res.htmlRel
   })
   handle(Channels.uaDiffImpact, async (projectId: string, paths: string[]) => {
     const project = await registry.require(projectId)

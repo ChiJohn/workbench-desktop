@@ -33,7 +33,7 @@ function readJson(path: string): Record<string, unknown> | null {
 
 /** 从指定的图谱数据目录（如 vault/项目/xxx/.ua 或 repo/.ua）读取统计信息 */
 export function readUaGraphSummaryFromDir(graphDir: string): UaGraphSummary | null {
-  const graph = readJson(join(graphDir, 'knowledge-graph.json'))
+  const graph = readJson(join(graphDir, 'knowledge-graph.json')) ?? readJson(join(graphDir, 'domain-graph.json'))
   if (!graph) return null
 
   const project =

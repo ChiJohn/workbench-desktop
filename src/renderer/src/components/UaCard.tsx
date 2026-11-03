@@ -24,6 +24,7 @@ export function UaCard({ projectId, available, headCommit }: Props) {
   const [opening, setOpening] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const status = useQuery({
     queryKey: qk.uaGraph(projectId),
     queryFn: () => unwrap(api.ua.graphStatus(projectId)),
@@ -101,12 +102,25 @@ export function UaCard({ projectId, available, headCommit }: Props) {
   const installPluginInTerminal = () =>
     sendToShell(UA_PLUGIN_INSTALL_CMD, '已在底部终端安装 UA 插件，完成后点卡片「刷新」即可生成图谱')
 
-  const runInTerminal = async () => {
+  const runInTerminal = async (mode: 'code' | 'domain' = 'code') => {
     try {
-      const plan = await unwrap(api.ua.prepareTerminal(projectId))
-      await sendToShell(plan.shellLine, `已在终端启动图谱分析，退出 Claude 后将自动收纳至 Vault（${plan.vaultRel}）`)
+      const plan = await unwrap(api.ua.prepareTerminal(projectId, mode))
+      const label = mode === 'domain' ? '业务流程图（/understand-domain）' : '代码知识图谱（/understand）'
+      await sendToShell(plan.shellLine, `已在终端启动${label}分析，退出 Claude 后将自动收纳至 Vault（${plan.vaultRel}）`)
     } catch (e) {
       toast.error(e, '准备终端图谱分析失败')
+    }
+  }
+
+  const exportDomainDoc = async () => {
+    setExporting(true)
+    try {
+      const htmlRel = await unwrap(api.ua.exportDomainDoc(projectId))
+      toast.success('已生成产品交互网页并打开所在文件夹，可直接拖给产品同学', htmlRel)
+    } catch (e) {
+      toast.error(e, '导出产品功能交互文档失败')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -209,14 +223,24 @@ export function UaCard({ projectId, available, headCommit }: Props) {
               </button>
             )}
             {pluginInstalled ? (
-              <button
-                className="btn"
-                type="button"
-                title="自动将 Vault 中已有图谱临时铺回仓库做增量分析，退出 Claude 后自动归档回 Vault 并清理仓库"
-                onClick={() => void runInTerminal()}
-              >
-                在终端增量更新
-              </button>
+              <>
+                <button
+                  className="btn"
+                  type="button"
+                  title="自动将 Vault 中已有图谱临时铺回仓库做增量分析，退出 Claude 后自动归档回 Vault 并清理仓库"
+                  onClick={() => void runInTerminal('code')}
+                >
+                  在终端增量更新
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  title="提取业务域、业务流程与步骤（生成 domain-graph.json），适合产品与业务梳理"
+                  onClick={() => void runInTerminal('domain')}
+                >
+                  {summary?.hasDomainGraph ? '更新业务流程图' : '生成业务流程图'}
+                </button>
+              </>
             ) : (
               <button
                 className="btn"
@@ -225,6 +249,17 @@ export function UaCard({ projectId, available, headCommit }: Props) {
                 onClick={() => void installPluginInTerminal()}
               >
                 安装 UA 插件
+              </button>
+            )}
+            {summary?.hasDomainGraph && (
+              <button
+                className="btn"
+                type="button"
+                disabled={exporting}
+                title="将 domain-graph.json 导出为含 Mermaid 流程图与业务规则的 Markdown 文档存入 Vault 并用 Obsidian 打开"
+                onClick={() => void exportDomainDoc()}
+              >
+                {exporting ? '导出中…' : '导出产品交互文档'}
               </button>
             )}
             <button className="btn btn-ghost" type="button" onClick={() => void copyAndOpenCursor()}>
@@ -256,9 +291,19 @@ export function UaCard({ projectId, available, headCommit }: Props) {
           )}
           <div className="button-row">
             {pluginInstalled ? (
-              <button className="btn btn-primary" type="button" onClick={() => void runInTerminal()}>
-                在终端生成图谱
-              </button>
+              <>
+                <button className="btn btn-primary" type="button" onClick={() => void runInTerminal('code')}>
+                  在终端生成图谱
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  title="轻量扫描路由与入口文件，快速生成面向产品的三层业务流程图（domain-graph.json）"
+                  onClick={() => void runInTerminal('domain')}
+                >
+                  生成业务流程图（轻量）
+                </button>
+              </>
             ) : (
               <button
                 className="btn btn-primary"

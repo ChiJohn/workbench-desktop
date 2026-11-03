@@ -75,7 +75,8 @@ const api: WorkbenchApi = {
     detail: (key) => invoke(Channels.tapdDetail, key),
     transition: (key, to) => invoke(Channels.tapdTransition, key, to),
     createCard: (key, projectId) => invoke(Channels.tapdCreateCard, key, projectId),
-    openCard: (relPath) => invoke(Channels.tapdOpenCard, relPath)
+    openCard: (relPath) => invoke(Channels.tapdOpenCard, relPath),
+    dispatchTerminal: (req) => invoke(Channels.tapdDispatchTerminal, req)
   },
   apifox: {
     status: () => invoke(Channels.apifoxStatus),
@@ -93,8 +94,9 @@ const api: WorkbenchApi = {
     graphStatus: (projectId) => invoke(Channels.uaGraphStatus, projectId),
     openDashboard: (projectId) => invoke(Channels.uaOpenDashboard, projectId),
     stopDashboard: (projectId) => invoke(Channels.uaStopDashboard, projectId),
-    prepareTerminal: (projectId) => invoke(Channels.uaPrepareTerminal, projectId),
+    prepareTerminal: (projectId, mode) => invoke(Channels.uaPrepareTerminal, projectId, mode),
     syncToVault: (projectId) => invoke(Channels.uaSyncToVault, projectId),
+    exportDomainDoc: (projectId) => invoke(Channels.uaExportDomainDoc, projectId),
     diffImpact: (projectId, paths) => invoke(Channels.uaDiffImpact, projectId, paths),
     vaultStatus: () => invoke(Channels.uaVaultStatus),
     openVaultDashboard: () => invoke(Channels.uaOpenVaultDashboard),

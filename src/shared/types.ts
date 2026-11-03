@@ -239,6 +239,7 @@ export interface UaGraphSummary {
 export interface UaPluginInfo {
   installed: boolean
   claudeUnderstandCmd: string
+  claudeDomainCmd: string
   claudeKnowledgeCmd: string
 }
 
@@ -599,6 +600,23 @@ export interface MulticaDispatchResult {
   issue: MulticaIssue
   /** metadata 写入失败等非致命问题 */
   warning?: string
+}
+
+export interface TerminalDispatchRequest {
+  tapdKey?: string
+  projectId: string
+  writer: ReportWriter
+  title: string
+  description: string
+  /** 是否自动确保生成 Vault 任务卡并把路径传给终端 AI */
+  ensureCard?: boolean
+  align?: { skipDesigns?: string[]; skipApis?: string[] }
+}
+
+export interface TerminalDispatchResult {
+  shellLine: string
+  promptFile: string
+  card: string | null
 }
 
 export interface MulticaCommitRequest {

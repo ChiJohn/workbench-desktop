@@ -81,8 +81,8 @@ function create(id: string, interactive: boolean): Entry {
     const ctrl = e.ctrlKey || e.metaKey
     const key = e.key.toLowerCase()
 
-    // 让全局快捷键（Ctrl+P 命令面板、F12 DevTools）冒泡到 window，不被终端吞成控制字符
-    if ((ctrl && key === 'p') || e.key === 'F12') {
+    // 让全局快捷键（Ctrl+P 命令面板、Ctrl+` 切换终端、F12 DevTools）冒泡到 window，不被终端吞成控制字符
+    if ((ctrl && (key === 'p' || e.key === '`' || e.code === 'Backquote')) || e.key === 'F12') {
       return false
     }
 

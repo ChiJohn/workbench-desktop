@@ -2,18 +2,21 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import type { MulticaOverview, Prefs, TodoItem } from '../../../shared/types'
 import { api, unwrap } from '../api'
-import { qk, refreshMultica, useMulticaOverview } from '../queries'
+import { qk, refreshMultica, useMulticaOverview, useRegistry } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
+import { TerminalDispatchDialog } from './TerminalDispatchDialog'
 
 const DEFAULT_AGENT = '前端开发'
 
 export function TodoPanel({ prefs }: { prefs?: Prefs }) {
   const overview = useMulticaOverview()
+  const registry = useRegistry()
   const openIssue = useUi((s) => s.openIssue)
   const [items, setItems] = useState<TodoItem[]>([])
   const [draft, setDraft] = useState('')
   const [dispatching, setDispatching] = useState<TodoItem | null>(null)
+  const [terminalTodo, setTerminalTodo] = useState<TodoItem | null>(null)
 
   const reload = async () => setItems(await unwrap(api.todo.list()))
 
@@ -69,9 +72,14 @@ export function TodoPanel({ prefs }: { prefs?: Prefs }) {
                 {item.issue}
               </button>
             ) : (
-              <button className="btn btn-small" disabled={!overview.data} onClick={() => setDispatching(item)}>
-                派单
-              </button>
+              <>
+                <button className="btn btn-small" onClick={() => setTerminalTodo(item)} title="在底部终端拉起 AI 处理">
+                  终端 AI
+                </button>
+                <button className="btn btn-small" disabled={!overview.data} onClick={() => setDispatching(item)}>
+                  派单
+                </button>
+              </>
             )}
             <button className="icon-btn" title="删除" onClick={() => remove(item.id)}>
               ×
@@ -98,6 +106,14 @@ export function TodoPanel({ prefs }: { prefs?: Prefs }) {
             setItems(next)
             setDispatching(null)
           }}
+        />
+      )}
+      {terminalTodo && (
+        <TerminalDispatchDialog
+          initialTitle={terminalTodo.text}
+          initialDescription={terminalTodo.text}
+          projects={registry.data?.projects ?? []}
+          onClose={() => setTerminalTodo(null)}
         />
       )}
     </div>
