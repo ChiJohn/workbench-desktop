@@ -458,18 +458,32 @@ export function LogPanel({ projects }: { projects: Project[] }) {
               停止
             </button>
           )}
-          <div className="log-dock-group" title="切换终端停靠布局（底部 / 左侧 / 右侧 / 最大化）">
-            {DOCK_OPTIONS.map((opt) => (
+          <div className="log-dock-group" title="切换终端停靠布局（底部 / 左侧 / 右侧 / 最大化还原）">
+            {logDock === 'maximized' && (
               <button
-                key={opt.value}
                 type="button"
-                className={`icon-btn dock-btn${logDock === opt.value ? ' on' : ''}`}
-                title={opt.label}
-                onClick={() => setLogDock(opt.value)}
+                className="btn btn-small"
+                title="退出最大化，恢复分栏尺寸"
+                onClick={() => setLogDock('maximized')}
               >
-                {opt.icon}
+                还原窗口
               </button>
-            ))}
+            )}
+            {DOCK_OPTIONS.map((opt) => {
+              const isMax = opt.value === 'maximized'
+              const active = logDock === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`icon-btn dock-btn${active ? ' on' : ''}`}
+                  title={isMax && active ? '还原回最大化前的位置' : opt.label}
+                  onClick={() => setLogDock(opt.value)}
+                >
+                  {isMax && active ? '❐' : opt.icon}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>

@@ -477,6 +477,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.gitCommit, async (id: string, files: string[], message: string) =>
     git.commitFiles(await repoPath(id), files, message)
   )
+  handle(Channels.gitDiscard, async (id: string, files: string[]) => {
+    await git.discardFiles(await repoPath(id), Array.isArray(files) ? files : [])
+    return null
+  })
   handle(Channels.gitGenerateCommitMsg, async (id: string, files: string[], writer?: ReportWriter) => {
     const path = await repoPath(id)
     const material = await git.commitMaterial(path, Array.isArray(files) ? files : [])

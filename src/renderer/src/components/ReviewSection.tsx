@@ -63,6 +63,21 @@ export function ReviewSection({ issue, repo }: { issue: MulticaIssue; repo: Proj
     setBusy(false)
   }
 
+  const discardFile = async (path: string) => {
+    if (busy) return
+    if (!window.confirm(`确认放弃对「${path}」的本地修改？\n此操作不可恢复。`)) return
+    setBusy(true)
+    try {
+      await unwrap(api.git.discard(repo.id, [path]))
+      toast.success(`已撤销 ${path}`)
+      if (viewing === path) setViewing(null)
+      await afterChange()
+    } catch (e) {
+      toast.error(e, '撤销改动失败')
+    }
+    setBusy(false)
+  }
+
   const complete = async (commit: MulticaCommitRequest | null) => {
     setBusy(true)
     try {
@@ -106,6 +121,18 @@ export function ReviewSection({ issue, repo }: { issue: MulticaIssue; repo: Proj
                   <span className="mono change-path" title={f.path}>
                     {f.path}
                   </span>
+                  <button
+                    className="btn btn-small btn-ghost"
+                    type="button"
+                    disabled={busy}
+                    title="放弃该文件的本地修改"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void discardFile(f.path)
+                    }}
+                  >
+                    撤销
+                  </button>
                 </div>
                 {isOpen && (
                   <div className="change-diff-inline">

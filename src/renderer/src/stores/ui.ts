@@ -19,6 +19,8 @@ interface UiState {
   logOpen: boolean
   /** 终端/日志面板停靠位置（类似 Chrome DevTools） */
   logDock: LogDock
+  /** 最大化前的停靠位置，用于一键还原 */
+  prevLogDock: 'bottom' | 'right' | 'left'
   /** 日志面板当前选中的标签 */
   logTab: { kind: 'run' | 'shell'; id: string } | null
   /** 任务页选中的单子 key */
@@ -86,20 +88,32 @@ export const useUi = create<UiState>((set) => ({
   search: '',
   logOpen: true,
   logDock: loadLogDock(),
+  prevLogDock: 'bottom',
   logTab: null,
   taskKey: null,
   issueId: null,
   setView: (view) => set({ view }),
   setSearch: (search) => set({ search }),
-  setLogOpen: (logOpen) => set({ logOpen }),
-  setLogDock: (logDock) => {
-    try {
-      localStorage.setItem(LOG_DOCK_STORAGE_KEY, logDock)
-    } catch {
-      // ignore
-    }
-    set({ logDock, logOpen: true })
-  },
+  setLogOpen: (logOpen) =>
+    set((state) => ({
+      logOpen,
+      // 最大化状态下点收起时自动还原回普通停靠位置
+      logDock: !logOpen && state.logDock === 'maximized' ? state.prevLogDock : state.logDock
+    })),
+  setLogDock: (nextDock) =>
+    set((state) => {
+      // 再次点击「最大化」时自动还原回最大化前的停靠位置
+      const resolved: LogDock =
+        nextDock === 'maximized' && state.logDock === 'maximized' ? state.prevLogDock : nextDock
+      const prevLogDock =
+        resolved !== 'maximized' ? resolved : state.logDock !== 'maximized' ? state.logDock : state.prevLogDock
+      try {
+        localStorage.setItem(LOG_DOCK_STORAGE_KEY, resolved)
+      } catch {
+        // ignore
+      }
+      return { logDock: resolved, prevLogDock, logOpen: true }
+    }),
   setLogTab: (logTab) => set({ logTab }),
   setTaskKey: (taskKey) => set({ taskKey }),
   setIssueId: (issueId) => set({ issueId }),

@@ -26,6 +26,7 @@ const api: WorkbenchApi = {
     changes: (id) => invoke(Channels.gitChanges, id),
     diff: (id, path) => invoke(Channels.gitDiff, id, path),
     commit: (id, files, message) => invoke(Channels.gitCommit, id, files, message),
+    discard: (id, files) => invoke(Channels.gitDiscard, id, files),
     generateCommitMsg: (id, files, writer) => invoke(Channels.gitGenerateCommitMsg, id, files, writer),
     stashes: (id) => invoke(Channels.gitStashes, id),
     stashPush: (id, message) => invoke(Channels.gitStashPush, id, message),

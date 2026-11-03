@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readFile, rm } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
 import type { BranchList, GitStashEntry, RepoStatus, WorktreeChange } from '../../shared/types'
 import { execCommand } from '../exec'
 import { AppError } from '../result'
@@ -225,6 +225,42 @@ export class GitService {
     await this.run(root, ['add', '-A', '--', ...files], QUICK_TIMEOUT)
     await this.run(root, ['commit', '-m', message.trim(), '--', ...files], COMMIT_TIMEOUT)
     return (await this.run(root, ['rev-parse', '--short', 'HEAD'], QUICK_TIMEOUT)).trim()
+  }
+
+  /** 撤销选中文件的本地改动（已跟踪文件恢复到 HEAD，未跟踪或新暂存文件直接删除） */
+  async discardFiles(repoPath: string, files: string[]): Promise<void> {
+    if (!files.length) throw new AppError('INVALID_DISCARD', '没有选择要撤销的文件')
+    const matched = await this.requireChanged(repoPath, files)
+    const root = resolve(await this.toplevel(repoPath))
+
+    const untracked: string[] = []
+    const added: string[] = []
+    const tracked: string[] = []
+
+    for (const item of matched) {
+      const full = resolve(root, item.path)
+      if (!full.startsWith(root + sep)) {
+        throw new AppError('INVALID_PATH', `非法的仓库内路径：${item.path}`)
+      }
+      if (item.code === '??') untracked.push(full)
+      else if (item.code.startsWith('A')) added.push(item.path)
+      else tracked.push(item.path)
+    }
+
+    if (tracked.length > 0) {
+      await this.run(root, ['restore', '--source=HEAD', '--staged', '--worktree', '--', ...tracked], QUICK_TIMEOUT).catch(
+        async () => {
+          await this.run(root, ['reset', 'HEAD', '--', ...tracked], QUICK_TIMEOUT).catch(() => undefined)
+          await this.run(root, ['checkout', '--', ...tracked], QUICK_TIMEOUT)
+        }
+      )
+    }
+    if (added.length > 0) {
+      await this.run(root, ['rm', '-f', '--', ...added], QUICK_TIMEOUT)
+    }
+    for (const full of untracked) {
+      await rm(full, { force: true })
+    }
   }
 
   async stashes(repoPath: string): Promise<GitStashEntry[]> {

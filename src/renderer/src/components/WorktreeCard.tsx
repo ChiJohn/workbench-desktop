@@ -116,6 +116,28 @@ export function WorktreeCard({ projectId, changeCount }: Props) {
     }
   }
 
+  const doDiscard = async (targets: string[], label: string) => {
+    if (busy || generatingMsg || targets.length === 0) return
+    if (
+      !window.confirm(
+        `确认撤销${label}的本地改动？\n\n已跟踪文件将恢复到 HEAD，未跟踪的新文件将被删除，此操作不可恢复。`
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    try {
+      await unwrap(api.git.discard(projectId, targets))
+      toast.success(`已撤销 ${targets.length} 个文件的改动`)
+      if (viewing && targets.includes(viewing)) setViewing(null)
+      await refreshAll()
+    } catch (err) {
+      toast.error(err, '撤销改动失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const doStashPush = async (e?: FormEvent) => {
     e?.preventDefault()
     if (busy || files.length === 0) return
@@ -219,6 +241,18 @@ export function WorktreeCard({ projectId, changeCount }: Props) {
                     <span className="mono change-path" title="点击展开或收起 diff">
                       {f.path}
                     </span>
+                    <button
+                      className="btn btn-small btn-ghost"
+                      type="button"
+                      disabled={busy || generatingMsg}
+                      title="放弃该文件的本地修改"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void doDiscard([f.path], `「${f.path}」`)
+                      }}
+                    >
+                      撤销
+                    </button>
                   </div>
                   {isOpen && (
                     <div className="change-diff-inline">
@@ -288,6 +322,15 @@ export function WorktreeCard({ projectId, changeCount }: Props) {
                 贮藏全部
               </button>
             ) : null}
+            <button
+              className="btn btn-danger"
+              type="button"
+              disabled={busy || generatingMsg || chosen.length === 0}
+              title="放弃所有已勾选文件的本地修改"
+              onClick={() => void doDiscard(chosen, `选中的 ${chosen.length} 个文件`)}
+            >
+              撤销选中
+            </button>
           </form>
 
           {stashNote !== null && (

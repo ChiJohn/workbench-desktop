@@ -207,4 +207,19 @@ describe('GitService', () => {
     expect(hash).toMatch(/^[0-9a-f]+$/)
     expect((await git.changes(sub)).length).toBe(0)
   })
+
+  it('discards modified tracked files, staged new files, and untracked files', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'tracked.txt', 'original')
+
+    writeFileSync(join(repo, 'tracked.txt'), 'dirty')
+    writeFileSync(join(repo, 'staged-new.txt'), 'staged')
+    sh(repo, 'add', 'staged-new.txt')
+    writeFileSync(join(repo, 'untracked.txt'), 'temp')
+
+    expect((await git.changes(repo)).length).toBe(3)
+    await git.discardFiles(repo, ['tracked.txt', 'staged-new.txt', 'untracked.txt'])
+    expect(await git.changes(repo)).toEqual([])
+  })
 })

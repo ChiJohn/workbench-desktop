@@ -128,6 +128,7 @@ export const Channels = {
   gitChanges: 'git.changes',
   gitDiff: 'git.diff',
   gitCommit: 'git.commit',
+  gitDiscard: 'git.discard',
   gitGenerateCommitMsg: 'git.generateCommitMsg',
   gitStashes: 'git.stashes',
   gitStashPush: 'git.stashPush',
@@ -217,6 +218,7 @@ export interface WorkbenchApi {
     changes(projectId: string): Promise<Result<WorktreeChange[]>>
     diff(projectId: string, path: string): Promise<Result<string>>
     commit(projectId: string, files: string[], message: string): Promise<Result<string>>
+    discard(projectId: string, files: string[]): Promise<Result<null>>
     generateCommitMsg(projectId: string, files: string[], writer?: ReportWriter): Promise<Result<string>>
     stashes(projectId: string): Promise<Result<GitStashEntry[]>>
     stashPush(projectId: string, message?: string): Promise<Result<null>>
