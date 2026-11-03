@@ -1,6 +1,8 @@
+import { clipboard } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { keepSources, parseDraft, splitAnswer } from '../core/knowledge/answer'
 import { ingestDroppedFile, type InboxItem } from '../core/knowledge/inbox'
@@ -179,6 +181,46 @@ export class KnowledgeController {
       }
     }
     return items
+  }
+
+  async ingestClipboard(): Promise<InboxItem> {
+    const vault = this.prefs.vaultPath
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+
+    const items = await clipboard.read().catch(() => [])
+    for (const item of items) {
+      const imgMime = item.types.find((t) => /^image\/(png|jpe?g|webp|bmp|gif)$/i.test(t))
+      if (!imgMime) continue
+      const blob = (await item.getType(imgMime)) as Blob
+      const buf = Buffer.from(await blob.arrayBuffer())
+      if (buf.length === 0) continue
+      const sub = imgMime.split('/')[1].toLowerCase()
+      const ext = sub === 'jpeg' ? 'jpg' : sub
+      const dir = await mkdtemp(join(tmpdir(), 'wb-clip-'))
+      const file = join(dir, `截图-${stamp}.${ext}`)
+      try {
+        await writeFile(file, buf)
+        return await ingestDroppedFile(vault, file, recognizeImage, now)
+      } finally {
+        await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      }
+    }
+
+    const text = (await clipboard.readText().catch(() => '')).trim()
+    if (text) {
+      const dir = await mkdtemp(join(tmpdir(), 'wb-clip-'))
+      const file = join(dir, `剪贴板-${stamp}.txt`)
+      try {
+        await writeFile(file, text, 'utf8')
+        return await ingestDroppedFile(vault, file, recognizeImage, now)
+      } finally {
+        await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      }
+    }
+
+    throw new AppError('INBOX_CLIPBOARD_EMPTY', '剪贴板里没有可归档的截图或文字')
   }
 
   async save(input: KnowledgeSaveRequest): Promise<string> {

@@ -6,13 +6,14 @@ describe('toolbar order', () => {
     expect(normalizeToolbarOrder(['settings', 'nope', 'settings', 'tasks'])).toEqual([
       'settings',
       'tasks',
-      'overview',
       'agents',
       'reports',
       'knowledge',
+      'bookmarks',
       'gap',
       'fetch',
-      'refresh'
+      'refresh',
+      'overview'
     ])
   })
 

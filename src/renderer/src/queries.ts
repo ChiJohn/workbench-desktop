@@ -20,6 +20,9 @@ export const qk = {
   cnbSummary: ['cnbSummary'] as const,
   cnbList: (id: string) => ['cnbList', id] as const,
   cnbTriggers: (id: string, branch: string) => ['cnbTriggers', id, branch] as const,
+  uaGraph: (id: string) => ['uaGraph', id] as const,
+  uaDiffImpact: (id: string, paths: string[]) => ['uaDiffImpact', id, ...paths] as const,
+  uaVault: ['uaVault'] as const,
   align: (key: string) => ['align', key] as const,
   tapdBoard: ['tapdBoard'] as const,
   tapdDetail: (key: string) => ['tapdDetail', key] as const,
@@ -28,6 +31,7 @@ export const qk = {
   multicaByTapd: (key: string) => ['multicaByTapd', key] as const,
   gitChanges: (id: string) => ['gitChanges', id] as const,
   gitDiff: (id: string, path: string) => ['gitDiff', id, path] as const,
+  gitStashes: (id: string) => ['gitStashes', id] as const,
   report: (kind: ReportKind, range: ReportRange) => ['report', kind, range.start, range.end] as const
 }
 
@@ -77,6 +81,15 @@ export function useGitDiff(id: string, path: string | null) {
     queryKey: qk.gitDiff(id, path ?? ''),
     queryFn: () => unwrap(api.git.diff(id, path as string)),
     enabled: Boolean(path),
+    retry: false
+  })
+}
+
+export function useGitStashes(id: string | null, enabled = true) {
+  return useQuery({
+    queryKey: qk.gitStashes(id ?? ''),
+    queryFn: () => unwrap(api.git.stashes(id as string)),
+    enabled: Boolean(id) && enabled,
     retry: false
   })
 }

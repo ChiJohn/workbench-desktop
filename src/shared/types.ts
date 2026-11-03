@@ -115,11 +115,14 @@ export interface RunnerExitEvent {
   exitCode: number | null
 }
 
+export type ShellKind = 'powershell' | 'bash' | 'cmd'
+
 export interface ShellSession {
   id: string
   title: string
   cwd: string
   pid: number
+  kind?: ShellKind
   status: 'running' | 'exited'
   exitCode: number | null
 }
@@ -219,9 +222,76 @@ export interface CnbSummaryItem {
   error?: string
 }
 
+export type UaDataDirName = '.ua' | '.understand-anything'
+export type UaGraphLocation = 'vault' | 'repo'
+
+export interface UaGraphSummary {
+  analyzedAt: string | null
+  gitCommitHash: string | null
+  description: string | null
+  nodeCount: number
+  edgeCount: number
+  layerCount: number
+  tourCount: number
+  hasDomainGraph: boolean
+}
+
+export interface UaPluginInfo {
+  installed: boolean
+  claudeUnderstandCmd: string
+  claudeKnowledgeCmd: string
+}
+
+export interface UaGraphStatus {
+  hasGraph: boolean
+  location: UaGraphLocation | null
+  dataDir: UaDataDirName | null
+  graphRel: string | null
+  /** 仓库目录下是否留有 .ua 临时/残留目录，可一键迁入 Vault 并清理 */
+  hasRepoResidue: boolean
+  summary: UaGraphSummary | null
+  viewerUrl: string | null
+  plugin: UaPluginInfo
+}
+
+export interface UaSyncResult {
+  vaultRel: string
+  movedFiles: string[]
+  cleanedRepo: boolean
+}
+
+export interface UaTerminalPlan {
+  shellLine: string
+  vaultRel: string
+}
+
+export interface UaDashboardOpen {
+  url: string
+}
+
+export interface UaImpactedItem {
+  id: string
+  name: string
+  filePath: string | null
+  type: string
+  summary: string
+  /** caller：依赖/调用了本次改动文件（上游易受波及）；callee：被本次改动文件调用/引用 */
+  relation: 'caller' | 'callee'
+  edgeTypes: string[]
+}
+
+export interface UaDiffImpact {
+  graphRel: string
+  matchedFiles: string[]
+  untrackedFiles: string[]
+  impacted: UaImpactedItem[]
+}
+
 export interface QuickLink {
   name: string
   url: string
+  /** false 时不出现在侧栏。未设置视为钉住，兼容原来的快速入口 */
+  pinned?: boolean
 }
 
 export interface Prefs {
@@ -229,6 +299,8 @@ export interface Prefs {
   /** Electron accelerator 格式 */
   hotkey: string
   terminal: 'wt' | 'powershell'
+  /** 开机自动启动并隐藏到托盘 */
+  autoLaunch?: boolean
   /** 微信开发者工具 cli.bat 路径 */
   wechatDevtoolsCli?: string
   /** 开发者工具「安全设置」中的 CLI 访问令牌 */
@@ -513,6 +585,8 @@ export interface MulticaIssueDetail {
 export interface MulticaDispatchRequest {
   tapdKey: string
   title: string
+  /** 用户在派单弹窗编辑后的描述；未传时使用 TAPD 原描述 */
+  description?: string
   /** multica 项目 id；null 表示不归属项目 */
   projectId: string | null
   /** null 表示暂不指派 */
@@ -543,6 +617,13 @@ export interface WorktreeChange {
   path: string
   /** porcelain v1 的两位状态码，如 ` M`、`??` */
   code: string
+}
+
+export interface GitStashEntry {
+  index: number
+  ref: string
+  age: string
+  message: string
 }
 
 export interface TapdPrefs {

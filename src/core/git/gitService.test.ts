@@ -151,4 +151,60 @@ describe('GitService', () => {
     expect(shown).toMatchObject({ text: expect.stringContaining('api_trigger') })
     expect(await git.showFile(repo, 'origin/missing', '.cnb.yml')).toEqual({ missing: 'rev' })
   })
+
+  it('pushes, lists, pops and drops stashes including untracked files', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'init')
+    writeFileSync(join(repo, 'a.txt'), 'modified')
+    writeFileSync(join(repo, 'new.txt'), 'untracked')
+
+    await git.stashPush(repo, '临时切分支修bug')
+    expect((await git.changes(repo)).length).toBe(0)
+
+    const list = await git.stashes(repo)
+    expect(list.length).toBe(1)
+    expect(list[0]).toMatchObject({ index: 0, ref: 'stash@{0}' })
+    expect(list[0].message).toContain('临时切分支修bug')
+
+    await git.stashPop(repo, 0)
+    expect((await git.stashes(repo)).length).toBe(0)
+    expect((await git.changes(repo)).map((c) => c.path).sort()).toEqual(['a.txt', 'new.txt'])
+
+    await git.stashPush(repo, '准备丢弃')
+    await git.stashDrop(repo, 0)
+    expect((await git.stashes(repo)).length).toBe(0)
+  })
+
+  it('previews diff and commits files when repoPath is a monorepo subdirectory', async () => {
+    const repo = join(root, 'mono')
+    initRepo(repo)
+    const sub = join(repo, 'apps', 'travel')
+    sh(repo, 'config', 'core.autocrlf', 'false')
+    writeFileSync(join(repo, 'README.md'), 'root\n')
+    sh(repo, 'add', '.')
+    sh(repo, 'commit', '-q', '-m', 'init')
+
+    const { mkdirSync } = await import('node:fs')
+    mkdirSync(sub, { recursive: true })
+    writeFileSync(join(sub, 'page.tsx'), 'export const v = 1\n')
+    sh(repo, 'add', '.')
+    sh(repo, 'commit', '-q', '-m', 'add travel')
+
+    writeFileSync(join(sub, 'page.tsx'), 'export const v = 2\n')
+    writeFileSync(join(sub, 'new.ts'), 'export const n = true\n')
+
+    const changes = await git.changes(sub)
+    expect(changes.map((c) => c.path).sort()).toEqual(['apps/travel/new.ts', 'apps/travel/page.tsx'])
+
+    const trackedDiff = await git.diff(sub, 'apps/travel/page.tsx')
+    expect(trackedDiff).toContain('+export const v = 2')
+
+    const untrackedDiff = await git.diff(sub, 'apps/travel/new.ts')
+    expect(untrackedDiff).toContain('+export const n = true')
+
+    const hash = await git.commitFiles(sub, ['apps/travel/page.tsx', 'apps/travel/new.ts'], 'feat: 子目录提交')
+    expect(hash).toMatch(/^[0-9a-f]+$/)
+    expect((await git.changes(sub)).length).toBe(0)
+  })
 })

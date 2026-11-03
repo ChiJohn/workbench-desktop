@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { StatusMap } from '../../../shared/ipc'
 import type { Prefs, Project } from '../../../shared/types'
-import { DEFAULT_QUICK_LINKS } from '../../../shared/quickLinks'
+import { sidebarLinks } from '../../../shared/quickLinks'
 import { api } from '../api'
 import { healthOf, TYPE_LABELS, TYPE_ORDER } from '../format'
 import { openWith } from '../queries'
@@ -76,15 +76,17 @@ export function ProjectList({ projects, status, prefs }: Props) {
         ))}
         {groups.length === 0 && <p className="hint">没有匹配的项目</p>}
       </div>
-      <div className="quick-links">
-        <h3 className="group-title">快速入口</h3>
-        {(prefs?.quickLinks ?? DEFAULT_QUICK_LINKS).map((link) => (
-          <button key={link.url} className="project-item quick-link" title={link.url} onClick={() => void api.app.openExternal(link.url)}>
-            <span className="project-name">{link.name}</span>
-            <span className="quick-link-arrow">↗</span>
-          </button>
-        ))}
-      </div>
+      {sidebarLinks(prefs?.quickLinks).length > 0 && (
+        <div className="quick-links">
+          <h3 className="group-title">快速入口</h3>
+          {sidebarLinks(prefs?.quickLinks).map((link) => (
+            <button key={link.url} className="project-item quick-link" title={link.url} onClick={() => void api.app.openExternal(link.url)}>
+              <span className="project-name">{link.name}</span>
+              <span className="quick-link-arrow">↗</span>
+            </button>
+          ))}
+        </div>
+      )}
     </aside>
   )
 }

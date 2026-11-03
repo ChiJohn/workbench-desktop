@@ -33,6 +33,13 @@ node node_modules/electron/install.js
 - 构建后会复核 `project.config.json` 中的 appid（Taro 以 `dist/` 中的为准），与确认时不一致会停止上传
 - CLI 出错时退出码可能仍为 0，因此以输出中的 `[error]` / `×` 判断失败
 
+### Understand Anything 看板与图谱协同
+
+- **图谱统一保存在 Obsidian Vault**：各项目的 UA 图谱默认归档在 Vault 的 `项目/<项目名>/.ua/` 下（排除 `intermediate/`、`tmp/`、`diff-overlay.json` 等临时文件），不污染代码仓库的 Git 工作区；打开看板时由工作台内置只读服务将 Vault 中的图谱与代码仓库中的源文件关联展示（点击图谱节点仍可只读预览真实源码）。
+- **项目详情页「Understand Anything」卡片**：自动读取 Vault `项目/<项目名>/.ua/knowledge-graph.json` 展示节点/边/分层/导览统计与基准 commit，并与当前仓库最新提交比对提示是否需要增量更新；点「在终端生成图谱 / 在终端增量更新」会自动把已有图谱临时铺回仓库做增量分析，退出 Claude 时自动归档回 Vault 并清理仓库 `.ua/`（若在 Cursor 中生成，也可点「收纳到 Vault 并清理仓库」一键迁入）。
+- **派单与改动审查联动**：向 multica 智能体派单时，自动从对应项目的 Vault 图谱匹配相关模块及上下游关联附在派单正文中；在智能体审查页勾选本地改动文件时，自动展示基于图谱边关系的「UA 影响面」（区分上游调用方与下游依赖方）。
+- **Vault 知识图谱**：工具栏「知识」页底部「知识图谱（Understand Anything）」卡片支持对整个 Obsidian Vault 运行 `/understand-knowledge .`，并在浏览器中只读打开双链与实体聚类看板。
+
 ### 任务中心
 
 工具栏「任务」页汇总 TAPD 上分配给我的未完成需求、缺陷和任务，按项目和迭代分组。
@@ -77,6 +84,7 @@ node node_modules/electron/install.js
 - 回答可存成 `问答/YYYY-MM-DD-标题.md`。速记可直接写入 `知识/`，或先让写稿工具收成要点再存
 - 智能体任务标为完成且回填了任务卡时，弹出沉淀草稿；同一张任务卡只沉淀一次
 - 快速搜索调用 `Obsidian.com search:context`，结果去掉汇报和附件，知识笔记排在前面
+- 拖入图片时，第一次识别会在本机 `127.0.0.1:17890` 拉起 OCR 服务（`ocr-server/server.py`，依赖本机 Python 3.10–3.13 + paddleocr）；之后复用同一进程。退出工作台时关掉。没装 Paddle 仍会归档，只是没有识别文字
 
 ## 开发
 

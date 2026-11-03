@@ -1,4 +1,4 @@
-export const TOOLBAR_IDS = ['overview', 'tasks', 'agents', 'reports', 'knowledge', 'gap', 'fetch', 'refresh', 'settings'] as const
+export const TOOLBAR_IDS = ['overview', 'tasks', 'agents', 'reports', 'knowledge', 'bookmarks', 'gap', 'fetch', 'refresh', 'settings'] as const
 
 export type ToolbarId = (typeof TOOLBAR_IDS)[number]
 
@@ -15,7 +15,15 @@ export function normalizeToolbarOrder(saved: unknown): ToolbarId[] {
       next.push(id as ToolbarId)
     }
   }
-  for (const id of TOOLBAR_IDS) if (!seen.has(id)) next.push(id)
+  for (const id of TOOLBAR_IDS) {
+    if (seen.has(id)) continue
+    const earlier = TOOLBAR_IDS.slice(0, TOOLBAR_IDS.indexOf(id))
+      .reverse()
+      .find((candidate) => seen.has(candidate))
+    const at = earlier ? next.indexOf(earlier) + 1 : next.length
+    next.splice(at, 0, id)
+    seen.add(id)
+  }
   return next
 }
 

@@ -8,10 +8,13 @@ import { openWith, qk, useGitAction, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { BranchSwitcher } from './BranchSwitcher'
+import { CollapsibleCard } from './CollapsibleCard'
 import { ReleaseCard } from './ReleaseCard'
 import { RepoAgentCard } from './RepoAgentCard'
 import { CnbCard } from './CnbCard'
+import { UaCard } from './UaCard'
 import { ScriptList } from './ScriptList'
+import { WorktreeCard } from './WorktreeCard'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
   cursor: 'Cursor IDE',
@@ -241,21 +244,27 @@ export function ProjectDetail({ project, status, prefs }: Props) {
             )}
           </section>
 
-          <CnbCard projectId={project.id} branch={r?.ok ? r.data.branch : null} />
+          <WorktreeCard key={project.id} projectId={project.id} changeCount={r?.ok ? r.data.changes : undefined} />
 
           {project.type === 'miniapp' && (
-            <section className="card">
-              <h2>小程序发版</h2>
+            <CollapsibleCard storageKey="release" title="小程序发版">
               <ReleaseCard key={project.id} project={project} prefs={prefs} />
-            </section>
+            </CollapsibleCard>
           )}
 
-          <section className="card">
-            <h2>脚本</h2>
+          <CollapsibleCard storageKey="scripts" title="脚本">
             <ScriptList projectId={project.id} prefs={prefs} />
-          </section>
+          </CollapsibleCard>
 
           <RepoAgentCard project={project} />
+
+          <CnbCard projectId={project.id} branch={r?.ok ? r.data.branch : null} />
+
+          <UaCard
+            projectId={project.id}
+            available={project.available}
+            headCommit={r?.ok ? (r.data.lastCommit?.hash ?? null) : null}
+          />
         </>
       )}
     </div>

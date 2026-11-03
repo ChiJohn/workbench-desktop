@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import type { ShellExitEvent, ShellOutputEvent, ShellSession } from '../shared/types'
+import type { ShellExitEvent, ShellKind, ShellOutputEvent, ShellSession } from '../shared/types'
 import { shellProgram } from '../core/shell/launch'
 import { killTree } from '../core/runner/killTree'
 import { AppError } from '../core/result'
@@ -34,10 +34,10 @@ export class ShellHost extends EventEmitter {
     super()
   }
 
-  async open(projectId: string | null, cols: number, rows: number): Promise<ShellSession> {
+  async open(projectId: string | null, cols: number, rows: number, kind: ShellKind = 'powershell'): Promise<ShellSession> {
     if (this.entries.size >= MAX_SHELLS) throw new AppError('SHELL_LIMIT', `最多同时开 ${MAX_SHELLS} 个终端`)
     const { cwd, title } = await this.place(projectId)
-    const program = shellProgram()
+    const program = shellProgram(kind)
     let pty: IPty
     try {
       pty = spawn(program.file, program.args, {
@@ -53,11 +53,13 @@ export class ShellHost extends EventEmitter {
       throw new AppError('SHELL_START', `终端没有打开：${message}`)
     }
 
+    const suffix = kind === 'bash' ? ' (Bash)' : kind === 'cmd' ? ' (CMD)' : ''
     const session: ShellSession = {
       id: randomUUID(),
-      title: this.uniqueTitle(title),
+      title: this.uniqueTitle(`${title}${suffix}`),
       cwd,
       pid: pty.pid,
+      kind,
       status: 'running',
       exitCode: null
     }
@@ -123,6 +125,11 @@ export class ShellHost extends EventEmitter {
 
   private async place(projectId: string | null): Promise<{ cwd: string; title: string }> {
     if (!projectId) return { cwd: homedir(), title: '终端' }
+    if (projectId === '__vault__') {
+      const vaultPath = this.services.prefs.get().vaultPath
+      if (!vaultPath || !existsSync(vaultPath)) throw new AppError('VAULT_MISSING', '还没有配置有效的 vault 目录')
+      return { cwd: vaultPath, title: '知识库' }
+    }
     const { projects } = await this.services.registry.current()
     const project = projects.find((item) => item.id === projectId)
     if (!project) throw new AppError('PROJECT_NOT_FOUND', '没有这个项目')
@@ -192,5 +199,10 @@ function shellEnv(): Record<string, string> {
     if (value !== undefined) env[key] = value
   }
   env.TERM = 'xterm-256color'
+  env.COLORTERM = 'truecolor'
+  env.LANG = env.LANG || 'zh_CN.UTF-8'
+  env.PYTHONIOENCODING = 'utf-8'
+  // 部分 CLI 在 CI=1 时会关闭交互式 stdin
+  if (env.CI === '1' || env.CI === 'true') delete env.CI
   return env
 }

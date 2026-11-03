@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, normalize } from 'node:path'
 import type { AssistantPrefs, MulticaPrefs, Prefs, PrefsPatch, ReportPrefs, TapdPrefs, KnowledgePrefs } from '../../shared/types'
+import { writeVaultPrefsBackup } from './vaultBackup'
 
 /** 映射按 key 合并，空字符串表示删除该映射 */
 function mergeMap(prev: Record<string, string> = {}, patch?: Record<string, string>): Record<string, string> {
@@ -96,5 +97,6 @@ export class PrefsStore {
     const tmp = `${this.file}.tmp`
     writeFileSync(tmp, JSON.stringify(this.prefs, null, 2))
     renameSync(tmp, this.file)
+    writeVaultPrefsBackup(this.prefs)
   }
 }

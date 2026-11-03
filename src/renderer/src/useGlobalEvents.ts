@@ -1,6 +1,7 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type { RegistryResult, ReleaseJob, ShellOutputEvent } from '../../shared/types'
+import { extractLocalUrl } from '../../core/runner/localUrl'
 import { api, unwrap } from './api'
 import { formatBytes } from './format'
 import { qk } from './queries'
@@ -45,11 +46,11 @@ export function useGlobalEvents(): void {
       try {
         const sessions = await unwrap(api.shell.list())
         for (const session of sessions) {
-          useShells.getState().upsert(session)
           ensureTerminal(session.id, true)
           const buf = await unwrap(api.shell.buffer(session.id))
           writeTerminal(session.id, buf.text)
           shellSeq.set(session.id, buf.seq)
+          useShells.getState().upsert(session)
         }
       } catch {
         // 主进程还没有终端时忽略
@@ -70,8 +71,21 @@ export function useGlobalEvents(): void {
         useUi.getState().setLogTab({ kind: 'run', id: session.runId })
         useUi.getState().setLogOpen(true)
       }),
-      api.on.runnerOutput((e) => writeTerminal(e.runId, e.chunk)),
-      api.on.runnerExit((e) => runs().markExited(e.runId, e.exitCode)),
+      api.on.runnerOutput((e) => {
+        writeTerminal(e.runId, e.chunk)
+        const url = extractLocalUrl(e.chunk)
+        if (url) runs().setUrl(e.runId, url)
+      }),
+      api.on.runnerExit((e) => {
+        const s = runs().sessions[e.runId]
+        const stoppedByUser = Boolean(runs().stoppedByUser[e.runId])
+        runs().markExited(e.runId, e.exitCode)
+        if (s && e.exitCode !== 0 && e.exitCode !== null && !stoppedByUser) {
+          const name =
+            qc.getQueryData<RegistryResult>(qk.registry)?.projects.find((p) => p.id === s.projectId)?.name ?? s.projectId
+          toast.failure(`脚本异常退出：${name}:${s.script}`, `退出码 ${e.exitCode}`)
+        }
+      }),
       api.on.shellOutput((event) => {
         if (!shellReady) {
           shellQueue.push(event)
@@ -104,7 +118,12 @@ export function useGlobalEvents(): void {
         for (const s of sessions) {
           if (runs().sessions[s.runId]) continue
           runs().upsert(s)
-          writeTerminal(s.runId, await unwrap(api.runner.buffer(s.runId)))
+          const buf = await unwrap(api.runner.buffer(s.runId))
+          writeTerminal(s.runId, buf)
+          if (s.status === 'running') {
+            const url = extractLocalUrl(buf)
+            if (url) runs().setUrl(s.runId, url)
+          }
         }
         if (!runs().active && sessions.length) runs().setActive(sessions[sessions.length - 1].runId)
       })

@@ -1,9 +1,15 @@
 import { app, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { basename, resolve, sep } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, join, resolve, sep } from 'node:path'
 import { AlignController, appendAlign } from './align'
 import { mcpSnippet } from '../core/align/mcpSnippet'
+import { buildCommitPrompt, cleanCommitMessage } from '../core/git/commitPrompt'
+import { readVaultPrefsBackup, VAULT_PREFS_REL } from '../core/prefs/vaultBackup'
+import { ReportWriterRunner, resolveWriter } from '../core/report/writer'
+import { killTree } from '../core/runner/killTree'
 import { createCard, findCard, findCardBy, backfillCard } from '../core/tasks/taskCard'
 import { mapLimit } from '../core/concurrency'
 import { desktopExe, multicaRuntimeEnv } from '../core/multica/multicaCli'
@@ -30,6 +36,7 @@ import type {
   ReportGenerateRequest,
   ReportKind,
   ReportRange,
+  ReportWriter,
   KnowledgeAskRequest,
   KnowledgeDraftRequest,
   KnowledgeSaveRequest,
@@ -48,6 +55,18 @@ import type { ProjectAdmin } from '../core/registry/projectAdmin'
 import type { RepoClone } from '../core/registry/repoClone'
 import type { Services } from './services'
 import { CnbController } from './cnb'
+import { UaViewerHost } from './uaViewer'
+import { findUaGraph, readUaGraphSummary, readUaGraphSummaryFromDir } from '../core/ua/graphDir'
+import { analyzeUaDiffImpact, buildUaDispatchContext } from '../core/ua/graphContext'
+import { detectUaClaudePlugin } from '../core/ua/pluginStatus'
+import {
+  buildUaTerminalLine,
+  ensureUaSyncHelper,
+  projectVaultUaDir,
+  resolveProjectUaLocation,
+  stageVaultUaToRepo,
+  syncRepoUaToVault
+} from '../core/ua/vaultStorage'
 import { StickyNoteController } from './stickyNote'
 import { ShellHost } from './shell'
 import { TodoController } from './todo'
@@ -228,12 +247,117 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.apifoxStatus, () => apifoxToken.status())
   handle(Channels.apifoxSetToken, (token: string | null) => apifoxToken.set(token))
   const cnb = new CnbController(services)
+  const uaViewer = new UaViewerHost()
   handle(Channels.cnbStatus, () => cnbToken.status())
   handle(Channels.cnbSetToken, (token: string | null) => cnbToken.set(token))
   handle(Channels.cnbList, (projectId: string) => cnb.list(projectId))
   handle(Channels.cnbSummary, () => cnb.summary())
   handle(Channels.cnbTriggers, (projectId: string, branch: string) => cnb.triggers(projectId, branch))
   handle(Channels.cnbStart, (projectId: string, branch: string, event: string) => cnb.start(projectId, branch, event))
+  const requireVaultPath = () => {
+    const vaultPath = prefs.get().vaultPath
+    if (!vaultPath || !existsSync(vaultPath)) throw new AppError('VAULT_MISSING', '请先在设置中配置有效的 vault 路径')
+    return vaultPath
+  }
+  handle(Channels.uaGraphStatus, async (projectId: string) => {
+    const project = await registry.require(projectId)
+    const loc = resolveProjectUaLocation(prefs.get().vaultPath, project)
+    return {
+      hasGraph: loc.hasGraph,
+      location: loc.location,
+      dataDir: loc.dataDir,
+      graphRel: loc.graphRel,
+      hasRepoResidue: loc.hasRepoResidue,
+      summary: loc.graphDir ? readUaGraphSummaryFromDir(loc.graphDir) : null,
+      viewerUrl: uaViewer.runningUrl(projectId),
+      plugin: detectUaClaudePlugin()
+    }
+  })
+  handle(Channels.uaOpenDashboard, async (projectId: string) => {
+    const project = await registry.require(projectId)
+    const loc = resolveProjectUaLocation(prefs.get().vaultPath, project)
+    const url = await uaViewer.open(projectId, { graphDir: loc.graphDir, repoPath: project.repoPath })
+    await shell.openExternal(url)
+    return { url }
+  })
+  handle(Channels.uaStopDashboard, async (projectId: string) => {
+    await uaViewer.stop(projectId)
+    return null
+  })
+  handle(Channels.uaPrepareTerminal, async (projectId: string) => {
+    const vaultPath = requireVaultPath()
+    const project = await registry.require(projectId)
+    const target = projectVaultUaDir(vaultPath, project)
+    if (!target) throw new AppError('VAULT_MISSING', '无法解析项目在 Vault 中的目录')
+    stageVaultUaToRepo(target.dir, project.repoPath)
+    const plugin = detectUaClaudePlugin()
+    const helperPath = ensureUaSyncHelper()
+    const shellLine = buildUaTerminalLine({
+      claudeCmd: plugin.claudeUnderstandCmd,
+      helperPath,
+      repoPath: project.repoPath,
+      vaultUaDir: target.dir
+    })
+    return { shellLine, vaultRel: target.rel }
+  })
+  handle(Channels.uaSyncToVault, async (projectId: string) => {
+    const vaultPath = requireVaultPath()
+    const project = await registry.require(projectId)
+    const target = projectVaultUaDir(vaultPath, project)
+    if (!target) throw new AppError('VAULT_MISSING', '无法解析项目在 Vault 中的目录')
+    const { movedFiles, cleanedRepo } = syncRepoUaToVault(project.repoPath, target.dir)
+    return { vaultRel: target.rel, movedFiles, cleanedRepo }
+  })
+  handle(Channels.uaDiffImpact, async (projectId: string, paths: string[]) => {
+    const project = await registry.require(projectId)
+    const loc = resolveProjectUaLocation(prefs.get().vaultPath, project)
+    return analyzeUaDiffImpact(project.repoPath, Array.isArray(paths) ? paths : [], 12, {
+      graphDir: loc.graphDir,
+      graphRel: loc.graphRel
+    })
+  })
+  handle(Channels.uaVaultStatus, () => {
+    const plugin = detectUaClaudePlugin()
+    const vaultPath = prefs.get().vaultPath
+    if (!vaultPath || !existsSync(vaultPath)) {
+      return {
+        hasGraph: false,
+        location: null,
+        dataDir: null,
+        graphRel: null,
+        hasRepoResidue: false,
+        summary: null,
+        viewerUrl: null,
+        plugin
+      }
+    }
+    const graph = findUaGraph(vaultPath)
+    return {
+      hasGraph: Boolean(graph),
+      location: graph ? ('vault' as const) : null,
+      dataDir: graph?.dataDir ?? null,
+      graphRel: graph?.graphRel ?? null,
+      hasRepoResidue: false,
+      summary: graph ? readUaGraphSummary(vaultPath, graph.dataDir) : null,
+      viewerUrl: uaViewer.runningUrl('__vault__'),
+      plugin
+    }
+  })
+  handle(Channels.uaOpenVaultDashboard, async () => {
+    const vaultPath = requireVaultPath()
+    const graph = findUaGraph(vaultPath)
+    const url = await uaViewer.open('__vault__', {
+      graphDir: graph ? join(vaultPath, graph.dataDir) : null,
+      repoPath: vaultPath,
+      missingHint: '知识库还没有 UA 图谱。可在知识页点「在终端生成知识图谱」执行 /understand-knowledge .'
+    })
+    await shell.openExternal(url)
+    return { url }
+  })
+  handle(Channels.uaStopVaultDashboard, async () => {
+    await uaViewer.stop('__vault__')
+    return null
+  })
   handle(Channels.alignList, (key: string) => align.state(key))
   handle(Channels.alignAdd, (key: string, url: string) => align.add(key, url))
   handle(Channels.alignRefresh, (key: string, url: string) => align.refresh(key, url))
@@ -241,8 +365,68 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.alignRename, (key: string, url: string, name: string) => align.rename(key, url, name))
   handle(Channels.alignMcpSnippet, (projectId: string) => mcpSnippet(projectId))
 
+  const commitWriterRunner = new ReportWriterRunner({
+    spawn: (command, args, cwd) => spawn(command, args, { cwd, windowsHide: true, stdio: 'pipe' }),
+    kill: killTree,
+    timeoutMs: 90_000,
+    busyMessage: '正在生成提交信息，请稍候'
+  })
+  const writerFs = {
+    exists: existsSync,
+    list: (d: string) => {
+      try {
+        return readdirSync(d)
+      } catch {
+        return []
+      }
+    }
+  }
+
   handle(Channels.gitChanges, async (id: string) => git.changes(await repoPath(id)))
   handle(Channels.gitDiff, async (id: string, path: string) => git.diff(await repoPath(id), path))
+  handle(Channels.gitCommit, async (id: string, files: string[], message: string) =>
+    git.commitFiles(await repoPath(id), files, message)
+  )
+  handle(Channels.gitGenerateCommitMsg, async (id: string, files: string[], writer?: ReportWriter) => {
+    const path = await repoPath(id)
+    const material = await git.commitMaterial(path, Array.isArray(files) ? files : [])
+    const prompt = buildCommitPrompt(material)
+    const reportPrefs = prefs.get().report ?? {}
+    const chosenWriter: ReportWriter =
+      writer === 'claude' || writer === 'cursor' || writer === 'codex' ? writer : 'claude'
+    const dir = await mkdtemp(join(tmpdir(), 'wb-commit-'))
+    try {
+      const cmd = resolveWriter(
+        {
+          writer: chosenWriter,
+          claudePath: reportPrefs.claudePath,
+          cursorAgentPath: reportPrefs.cursorAgentPath,
+          codexPath: reportPrefs.codexPath,
+          workspace: chosenWriter === 'cursor' ? path : dir,
+          profile: 'fast'
+        },
+        process.env,
+        writerFs
+      )
+      const out = await commitWriterRunner.run(cmd, prompt, chosenWriter === 'cursor' ? path : dir, () => undefined)
+      return cleanCommitMessage(out)
+    } finally {
+      void rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 }).catch(() => undefined)
+    }
+  })
+  handle(Channels.gitStashes, async (id: string) => git.stashes(await repoPath(id)))
+  handle(Channels.gitStashPush, async (id: string, message?: string) => {
+    await git.stashPush(await repoPath(id), message)
+    return null
+  })
+  handle(Channels.gitStashPop, async (id: string, index: number) => {
+    await git.stashPop(await repoPath(id), index)
+    return null
+  })
+  handle(Channels.gitStashDrop, async (id: string, index: number) => {
+    await git.stashDrop(await repoPath(id), index)
+    return null
+  })
   handle(Channels.gitRemoteWeb, async (id: string) => {
     const remote = await git.origin(await repoPath(id))
     return remote ? remoteWebUrl(remote) : null
@@ -279,16 +463,26 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.multicaDispatch, async (req: MulticaDispatchRequest) => {
     await registry.current().catch(() => null)
     const { item, description } = await tapd.detail(req.tapdKey)
+    const finalDesc = req.description !== undefined ? req.description : description
     const tapdPrefs = prefs.get().tapd
     const tapdRepoId = item.iterationId ? tapdPrefs?.iterationRepos?.[item.iterationId] : tapdPrefs?.itemRepos?.[item.key]
     const repoId = (req.projectId ? (await multica.project(req.projectId))?.repoId : null) ?? tapdRepoId
     const repo = repoId ? registry.cachedProjects().find((p) => p.id === repoId) : undefined
     const aligned = await align.forDispatch(req.tapdKey, req.align)
-    const body = appendAlign(
-      dispatchDescription({ repoPath: repo?.repoPath ?? null, kind: item.kind, url: item.url, body: description }),
+    let body = appendAlign(
+      dispatchDescription({ repoPath: repo?.repoPath ?? null, kind: item.kind, url: item.url, body: finalDesc }),
       aligned.designs,
       aligned.contracts
     )
+    const uaLoc = repo ? resolveProjectUaLocation(prefs.get().vaultPath, repo) : null
+    const uaContext =
+      repo && uaLoc?.graphDir
+        ? buildUaDispatchContext(repo.repoPath, `${req.title}\n${finalDesc}`, 6, {
+            graphDir: uaLoc.graphDir,
+            graphRel: uaLoc.graphRel
+          })
+        : null
+    if (uaContext) body = `${body.trim()}\n\n${uaContext}\n`
     const result = await multica.dispatch(req, body)
     if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
     return result
@@ -353,6 +547,7 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.knowledgeDraft, (req: KnowledgeDraftRequest) => knowledge.draft(req))
   handle(Channels.knowledgeSave, (req: KnowledgeSaveRequest) => knowledge.save(req))
   handle(Channels.knowledgeIngest, (paths: string[]) => knowledge.ingest(paths))
+  handle(Channels.knowledgeIngestClipboard, () => knowledge.ingestClipboard())
 
   const assistant = new AssistantController(services, knowledge, (text) => send(Events.assistantProgress, text))
   handle(Channels.assistantSend, (text: string, context: AssistantContext) => assistant.send(text, context))
@@ -387,6 +582,13 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     const prev = prefs.get()
     const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, cnbTokenEnc: _cnb, ...safePatch } = patch
     if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
+    if (safePatch.autoLaunch !== undefined && safePatch.autoLaunch !== prev.autoLaunch) {
+      try {
+        app.setLoginItemSettings({ openAtLogin: Boolean(safePatch.autoLaunch), args: ['--hidden'] })
+      } catch {
+        // 开发态或无权限时忽略
+      }
+    }
     const next = prefs.update(safePatch)
     if (safePatch.multica && ('profile' in safePatch.multica || 'cliPath' in safePatch.multica)) multica.reset()
     if (safePatch.report && ('authors' in safePatch.report || 'displayName' in safePatch.report)) report.reset()
@@ -395,6 +597,23 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
       await registry.load().catch(() => undefined)
       send(Events.registryChanged)
     }
+    return publicPrefs(next)
+  })
+  handle(Channels.settingsRestoreFromVault, () => {
+    const vaultPath = prefs.get().vaultPath
+    if (!vaultPath || !existsSync(vaultPath)) throw new AppError('VAULT_MISSING', '请先配置有效的 vault 路径')
+    const backup = readVaultPrefsBackup(vaultPath)
+    if (!backup) throw new AppError('PREFS_BACKUP_MISSING', `Vault 中还没有偏好备份（${VAULT_PREFS_REL}）`)
+    if (backup.hotkey && backup.hotkey !== prefs.get().hotkey) {
+      try {
+        hotkey.apply(backup.hotkey)
+      } catch {
+        // ignore hotkey conflict on restore
+      }
+    }
+    const next = prefs.update(backup)
+    multica.reset()
+    report.reset()
     return publicPrefs(next)
   })
 
@@ -427,16 +646,36 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.todoAdd, (text: string) => todo.add(text))
   handle(Channels.todoToggle, (id: string) => todo.toggle(id))
   handle(Channels.todoRemove, (id: string) => todo.remove(id))
-  handle(Channels.todoDispatch, async (req: { id: string; title: string; projectId: string | null; agentId: string | null }) => {
-    const items = await todo.list()
-    const item = items.find((i) => i.id === req.id)
-    if (!item) throw new AppError('TODO_NOT_FOUND', '没有这条待办')
-    if (item.issue) throw new AppError('TODO_ALREADY_DISPATCHED', `已派单 ${item.issue}`)
-    const title = req.title.trim() || item.text
-    const issue = await multica.createIssue({ title, description: item.text, projectId: req.projectId, agentId: req.agentId })
-    if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
-    return todo.markDispatched(req.id, issue.identifier)
-  })
+  handle(
+    Channels.todoDispatch,
+    async (req: { id: string; title: string; description?: string; projectId: string | null; agentId: string | null }) => {
+      const items = await todo.list()
+      const item = items.find((i) => i.id === req.id)
+      if (!item) throw new AppError('TODO_NOT_FOUND', '没有这条待办')
+      if (item.issue) throw new AppError('TODO_ALREADY_DISPATCHED', `已派单 ${item.issue}`)
+      const title = req.title.trim() || item.text
+      const rawDesc = req.description?.trim() || item.text
+      await registry.current().catch(() => null)
+      const mp = req.projectId ? await multica.project(req.projectId).catch(() => null) : null
+      const repo = mp?.repoId ? registry.cachedProjects().find((p) => p.id === mp.repoId) : undefined
+      const uaLoc = repo ? resolveProjectUaLocation(prefs.get().vaultPath, repo) : null
+      const uaContext =
+        repo && uaLoc?.graphDir
+          ? buildUaDispatchContext(repo.repoPath, `${title}\n${rawDesc}`, 6, {
+              graphDir: uaLoc.graphDir,
+              graphRel: uaLoc.graphRel
+            })
+          : null
+      const description = uaContext
+        ? `## 仓库\n\n\`${repo!.repoPath}\`\n\n## 描述\n\n${rawDesc}\n\n${uaContext}\n`
+        : repo
+          ? `## 仓库\n\n\`${repo.repoPath}\`\n\n## 描述\n\n${rawDesc}\n`
+          : rawDesc
+      const issue = await multica.createIssue({ title, description, projectId: req.projectId, agentId: req.agentId })
+      if (req.agentId) prefs.update({ multica: { lastAgentId: req.agentId } })
+      return todo.markDispatched(req.id, issue.identifier)
+    }
+  )
 
   registry.on('changed', () => send(Events.registryChanged))
   runner.on('started', (session) => send(Events.runnerStarted, session))
@@ -444,7 +683,9 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   runner.on('exit', (event) => send(Events.runnerExit, event))
 
   const shells = new ShellHost(services)
-  handle(Channels.shellOpen, (projectId: string | null, cols: number, rows: number) => shells.open(projectId, cols, rows))
+  handle(Channels.shellOpen, (projectId: string | null, cols: number, rows: number, kind?: 'powershell' | 'bash' | 'cmd') =>
+    shells.open(projectId, cols, rows, kind)
+  )
   handle(Channels.shellWrite, (id: string, data: string) => {
     shells.write(id, data)
     return null
@@ -461,7 +702,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.shellBuffer, (id: string) => shells.buffer(id))
   shells.on('output', (event) => send(Events.shellOutput, event))
   shells.on('exit', (event) => send(Events.shellExit, event))
-  app.on('will-quit', () => shells.killAll())
+  app.on('will-quit', () => {
+    shells.killAll()
+    uaViewer.killAll()
+  })
   release.on('changed', (job: ReleaseJob) => {
     if (job.action === 'upload' && job.status === 'ok' && job.upload) {
       prefs.update({ repos: { [job.projectId]: { lastUploadVersion: job.upload.version } } })

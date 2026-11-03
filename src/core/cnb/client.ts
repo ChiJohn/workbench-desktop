@@ -90,8 +90,14 @@ function assertBranch(branch: string): string {
 
 function assertEvent(event: string): string {
   const name = event.trim()
-  if (!/^(?:api_trigger|web_trigger)(?:_[\w.-]+)?$/.test(name)) {
-    throw new AppError('INVALID_EVENT', `只能触发配置里的 api_trigger 或 web_trigger 事件：「${event}」`)
+  if (/^web_trigger(?:_[\w.-]+)?$/.test(name)) {
+    throw new AppError(
+      'CNB_WEB_TRIGGER',
+      `「${name}」是页面按钮事件。CNB 接口只接受 api_trigger，提交会返回 400。请到 CNB 网页上点这个按钮。`
+    )
+  }
+  if (!/^api_trigger(?:_[\w.-]+)?$/.test(name)) {
+    throw new AppError('INVALID_EVENT', `只能触发配置里的 api_trigger 事件：「${event}」`)
   }
   return name
 }
@@ -118,8 +124,21 @@ async function cnbFetch(url: string, token: string, fetchImpl: typeof fetch | un
   }
   if (response.status === 401) throw new AppError('CNB_TOKEN', 'CNB 令牌无效，请在设置里重新填写')
   if (response.status === 403) throw new AppError('CNB_FORBIDDEN', forbidden)
-  if (!response.ok) throw new AppError('CNB_FAILED', `CNB 返回 ${response.status}`)
+  if (!response.ok) throw new AppError('CNB_FAILED', await failureText(response))
   return response
+}
+
+async function failureText(response: Response): Promise<string> {
+  const raw = await response.text()
+  let detail = ''
+  try {
+    const body = JSON.parse(raw) as { message?: string; info?: string; error?: string; msg?: string }
+    detail = body.message || body.info || body.error || body.msg || ''
+  } catch {
+    detail = raw
+  }
+  detail = detail.replace(/\s+/g, ' ').trim().slice(0, 180)
+  return detail ? `CNB 返回 ${response.status}：${detail}` : `CNB 返回 ${response.status}`
 }
 
 function toBuild(item: RawLog, web: string, slug: string): CnbBuild {

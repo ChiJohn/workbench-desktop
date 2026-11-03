@@ -25,6 +25,12 @@ const api: WorkbenchApi = {
     createBranch: (id, branch) => invoke(Channels.gitCreateBranch, id, branch),
     changes: (id) => invoke(Channels.gitChanges, id),
     diff: (id, path) => invoke(Channels.gitDiff, id, path),
+    commit: (id, files, message) => invoke(Channels.gitCommit, id, files, message),
+    generateCommitMsg: (id, files, writer) => invoke(Channels.gitGenerateCommitMsg, id, files, writer),
+    stashes: (id) => invoke(Channels.gitStashes, id),
+    stashPush: (id, message) => invoke(Channels.gitStashPush, id, message),
+    stashPop: (id, index) => invoke(Channels.gitStashPop, id, index),
+    stashDrop: (id, index) => invoke(Channels.gitStashDrop, id, index),
     remoteWeb: (id) => invoke(Channels.gitRemoteWeb, id)
   },
   multica: {
@@ -46,7 +52,7 @@ const api: WorkbenchApi = {
     dispose: (runId) => invoke(Channels.runnerDispose, runId)
   },
   shell: {
-    open: (projectId, cols, rows) => invoke(Channels.shellOpen, projectId, cols, rows),
+    open: (projectId, cols, rows, kind) => invoke(Channels.shellOpen, projectId, cols, rows, kind),
     write: (id, data) => invoke(Channels.shellWrite, id, data),
     resize: (id, cols, rows) => invoke(Channels.shellResize, id, cols, rows),
     close: (id) => invoke(Channels.shellClose, id),
@@ -83,6 +89,17 @@ const api: WorkbenchApi = {
     triggers: (projectId, branch) => invoke(Channels.cnbTriggers, projectId, branch),
     start: (projectId, branch, event) => invoke(Channels.cnbStart, projectId, branch, event)
   },
+  ua: {
+    graphStatus: (projectId) => invoke(Channels.uaGraphStatus, projectId),
+    openDashboard: (projectId) => invoke(Channels.uaOpenDashboard, projectId),
+    stopDashboard: (projectId) => invoke(Channels.uaStopDashboard, projectId),
+    prepareTerminal: (projectId) => invoke(Channels.uaPrepareTerminal, projectId),
+    syncToVault: (projectId) => invoke(Channels.uaSyncToVault, projectId),
+    diffImpact: (projectId, paths) => invoke(Channels.uaDiffImpact, projectId, paths),
+    vaultStatus: () => invoke(Channels.uaVaultStatus),
+    openVaultDashboard: () => invoke(Channels.uaOpenVaultDashboard),
+    stopVaultDashboard: () => invoke(Channels.uaStopVaultDashboard)
+  },
   align: {
     list: (key) => invoke(Channels.alignList, key),
     add: (key, url) => invoke(Channels.alignAdd, key, url),
@@ -103,7 +120,8 @@ const api: WorkbenchApi = {
     search: (query, project) => invoke(Channels.knowledgeSearch, query, project),
     draft: (req) => invoke(Channels.knowledgeDraft, req),
     save: (req) => invoke(Channels.knowledgeSave, req),
-    ingest: (paths) => invoke(Channels.knowledgeIngest, paths)
+    ingest: (paths) => invoke(Channels.knowledgeIngest, paths),
+    ingestClipboard: () => invoke(Channels.knowledgeIngestClipboard)
   },
   assistant: {
     send: (text, context) => invoke(Channels.assistantSend, text, context),
@@ -120,7 +138,8 @@ const api: WorkbenchApi = {
   },
   settings: {
     get: () => invoke(Channels.settingsGet),
-    set: (patch) => invoke(Channels.settingsSet, patch)
+    set: (patch) => invoke(Channels.settingsSet, patch),
+    restoreFromVault: () => invoke(Channels.settingsRestoreFromVault)
   },
   vault: {
     init: (path) => invoke(Channels.vaultInit, path)

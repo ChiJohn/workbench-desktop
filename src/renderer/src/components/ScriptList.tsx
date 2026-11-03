@@ -1,10 +1,12 @@
 import type { Prefs } from '../../../shared/types'
+import { api } from '../api'
 import { startScript, stopScript, useSavePrefs, useScripts } from '../queries'
 import { findRunning, useRuns } from '../stores/runs'
 
 export function ScriptList({ projectId, prefs }: { projectId: string; prefs?: Prefs }) {
   const scripts = useScripts(projectId)
   const sessions = useRuns((s) => s.sessions)
+  const urls = useRuns((s) => s.urls)
   const setActive = useRuns((s) => s.setActive)
   const savePrefs = useSavePrefs()
 
@@ -46,6 +48,15 @@ export function ScriptList({ projectId, prefs }: { projectId: string; prefs?: Pr
             </span>
             {running ? (
               <>
+                {urls[running.runId] && (
+                  <button
+                    className="btn btn-small"
+                    title={urls[running.runId]}
+                    onClick={() => void api.app.openExternal(urls[running.runId])}
+                  >
+                    打开 ↗
+                  </button>
+                )}
                 <button className="btn btn-small" onClick={() => setActive(running.runId)}>
                   日志
                 </button>

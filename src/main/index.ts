@@ -14,6 +14,7 @@ import { ReportReminder } from './reportReminder'
 import { createServices, ensureWechatCli } from './services'
 import { TapdPoller } from './tapdPoller'
 import { createTray } from './tray'
+import { stopOcrService } from './paddleRecognize'
 
 let win: BrowserWindow | null = null
 let quitting = false
@@ -36,7 +37,9 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => {
+    if (!process.argv.includes('--hidden')) window.show()
+  })
   window.on('close', (e) => {
     if (quitting) return
     e.preventDefault()
@@ -199,6 +202,7 @@ function bootstrap(): void {
     hotkey.dispose()
     services.registry.unwatch()
     tray.destroy()
+    stopOcrService()
   })
 }
 

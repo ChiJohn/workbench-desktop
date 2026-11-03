@@ -5,6 +5,7 @@ import { api, unwrap } from '../api'
 import { formatDuration } from '../format'
 import { qk } from '../queries'
 import { toast } from '../stores/toast'
+import { CollapsibleCard, useCardOpen } from './CollapsibleCard'
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '进行中',
@@ -38,23 +39,27 @@ export function CnbBadge({ item }: { item?: CnbSummaryItem }) {
 
 export function CnbCard({ projectId, branch }: { projectId: string; branch: string | null }) {
   const qc = useQueryClient()
+  const open = useCardOpen('cnb')
   const [starting, setStarting] = useState(false)
   const [picked, setPicked] = useState('')
   const builds = useQuery({
     queryKey: qk.cnbList(projectId),
     queryFn: () => unwrap(api.cnb.list(projectId)),
+    enabled: open,
     retry: false
   })
   const notCnb = Boolean(builds.data && !builds.data.slug)
   const triggers = useQuery({
     queryKey: qk.cnbTriggers(projectId, branch ?? ''),
     queryFn: () => unwrap(api.cnb.triggers(projectId, branch as string)),
-    enabled: Boolean(branch) && Boolean(builds.data?.slug),
+    enabled: open && Boolean(branch) && Boolean(builds.data?.slug),
     retry: false
   })
   const options = triggers.data?.options ?? []
   const matched = options.filter((item) => item.matched)
   const chosen = matched.find((item) => item.name === picked) ?? (matched.length === 1 ? matched[0] : undefined)
+  const webButton = Boolean(chosen?.event.startsWith('web_trigger'))
+  const latest = builds.data?.builds[0]
 
   const start = async () => {
     if (!branch || !chosen) return
@@ -79,33 +84,55 @@ export function CnbCard({ projectId, branch }: { projectId: string; branch: stri
   }
 
   return (
-    <section className="card">
-      <div className="page-header">
-        <h2>CNB 构建</h2>
-        {!notCnb && (
-          <>
-            <select
-              value={chosen?.name ?? ''}
-              disabled={!branch || triggers.isPending || options.length === 0}
-              title="来自 .cnb/web_trigger.yml，只启用当前分支匹配的按钮"
-              onChange={(e) => setPicked(e.target.value)}
-            >
-              <option value="">{branch ? '选择构建' : '先切到一个分支'}</option>
-              {options.map((item) => (
-                <option key={item.name} value={item.name} disabled={!item.matched}>
-                  {item.matched ? item.name : `${item.name}（当前分支不可用）`}
-                </option>
-              ))}
-            </select>
-            <button className="btn btn-small" type="button" disabled={!chosen || starting} onClick={() => void start()}>
-              {starting ? '触发中…' : '构建'}
-            </button>
-          </>
-        )}
-        <button className="btn btn-small" disabled={builds.isFetching} onClick={() => qc.invalidateQueries({ queryKey: qk.cnbList(projectId) })}>
-          {builds.isFetching ? '刷新中…' : '刷新'}
-        </button>
-      </div>
+    <CollapsibleCard
+      storageKey="cnb"
+      title="CNB 构建"
+      badges={
+        !open && latest ? (
+          <span className={`task-status ${cnbStatusClass(latest.status)}`} title={latest.title}>
+            {cnbStatusLabel(latest.status)}
+          </span>
+        ) : undefined
+      }
+      actions={
+        <>
+          {!notCnb && (
+            <>
+              <select
+                value={chosen?.name ?? ''}
+                disabled={!branch || triggers.isPending || options.length === 0}
+                title="来自 .cnb/web_trigger.yml，只启用当前分支匹配的按钮"
+                onChange={(e) => setPicked(e.target.value)}
+              >
+                <option value="">{branch ? '选择构建' : '先切到一个分支'}</option>
+                {options.map((item) => (
+                  <option key={item.name} value={item.name} disabled={!item.matched}>
+                    {item.matched ? item.name : `${item.name}（当前分支不可用）`}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="btn btn-small"
+                type="button"
+                disabled={!chosen || starting || webButton}
+                title={webButton ? '页面按钮不能走构建接口，CNB 会返回 400' : undefined}
+                onClick={() => void start()}
+              >
+                {starting ? '触发中…' : '构建'}
+              </button>
+            </>
+          )}
+          <button
+            className="btn btn-small"
+            type="button"
+            disabled={builds.isFetching}
+            onClick={() => void qc.invalidateQueries({ queryKey: qk.cnbList(projectId) })}
+          >
+            {builds.isFetching ? '刷新中…' : '刷新'}
+          </button>
+        </>
+      }
+    >
       {branch && builds.data?.slug && triggers.data?.missing === 'rev' && (
         <p className="hint">本地还没有 origin/{branch}，先 fetch 再选择构建事件。</p>
       )}
@@ -115,6 +142,11 @@ export function CnbCard({ projectId, branch }: { projectId: string; branch: stri
       {branch && builds.data?.slug && triggers.data && !triggers.data.missing && matched.length === 0 && options.length > 0 && (
         <p className="hint">
           当前分支没有可用的构建按钮。配置里有：{options.map((item) => item.name).join('、')}。换到 dev、test、uat 或 main 开头的分支后再选。
+        </p>
+      )}
+      {webButton && (
+        <p className="hint">
+          「{chosen?.name}」是页面按钮（{chosen?.event}）。CNB 的触发接口只接受 api_trigger，从这里提交会返回 400。请到 CNB 网页上点这个按钮。
         </p>
       )}
       {branch && builds.data?.slug && triggers.data && !triggers.data.missing && options.length === 0 && (
@@ -132,7 +164,7 @@ export function CnbCard({ projectId, branch }: { projectId: string; branch: stri
           ))}
         </div>
       )}
-    </section>
+    </CollapsibleCard>
   )
 }
 

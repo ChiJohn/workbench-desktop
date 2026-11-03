@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import type { Project, RunSession, ShellSession } from '../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { Project, RunSession, ShellKind, ShellSession } from '../../../shared/types'
 import { api, unwrap } from '../api'
 import { stripAnsi } from '../format'
 import { stopScript } from '../queries'
@@ -7,7 +7,27 @@ import { useRuns } from '../stores/runs'
 import { useShells } from '../stores/shells'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
-import { attachTerminal, bindTerminalInput, clearTerminal, disposeTerminal, ensureTerminal, fitTerminal, focusTerminal } from '../terminals'
+import {
+  attachTerminal,
+  bindTerminalInput,
+  clearTerminal,
+  disposeTerminal,
+  ensureTerminal,
+  fitTerminal,
+  focusTerminal,
+  handleTerminalContextMenu,
+  searchTerminal,
+  setTerminalSearchHandler
+} from '../terminals'
+
+const LOG_HEIGHT_KEY = 'wb.logHeight'
+const SHELL_KIND_KEY = 'wb.shellKind'
+const DEFAULT_LOG_HEIGHT = 280
+
+function clampLogHeight(h: number): number {
+  const max = typeof window !== 'undefined' ? Math.max(240, Math.floor(window.innerHeight * 0.72)) : 640
+  return Math.max(140, Math.min(max, Math.round(h)))
+}
 
 function TerminalView({
   runId,
@@ -21,8 +41,8 @@ function TerminalView({
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (ref.current) attachTerminal(runId, ref.current)
-  }, [runId])
+    if (ref.current) attachTerminal(runId, ref.current, Boolean(interactive))
+  }, [runId, interactive])
 
   useEffect(() => {
     if (!interactive) return
@@ -44,7 +64,22 @@ function TerminalView({
     return () => observer.disconnect()
   }, [runId, visible, interactive])
 
-  return <div ref={ref} className="terminal" style={{ display: visible ? 'block' : 'none' }} />
+  return (
+    <div
+      ref={ref}
+      className="terminal"
+      style={{ display: visible ? 'block' : 'none' }}
+      onMouseDown={() => {
+        if (interactive && visible) focusTerminal(runId)
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        void handleTerminalContextMenu(runId).then((res) => {
+          if (res === 'copied') toast.success('已复制选中内容')
+        })
+      }}
+    />
+  )
 }
 
 function tabState(s: RunSession, stoppedByUser: boolean): 'running' | 'ok' | 'failed' {
@@ -58,13 +93,36 @@ function shellState(s: ShellSession): 'running' | 'ok' | 'failed' {
 }
 
 export function LogPanel({ projects }: { projects: Project[] }) {
-  const { sessions, order, active, stoppedByUser, setActive, remove } = useRuns()
+  const { sessions, order, active, stoppedByUser, urls, setActive, remove } = useRuns()
   const shells = useShells()
   const open = useUi((s) => s.logOpen)
   const setOpen = useUi((s) => s.setLogOpen)
   const logTab = useUi((s) => s.logTab)
   const setLogTab = useUi((s) => s.setLogTab)
   const view = useUi((s) => s.view)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const [height, setHeight] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(LOG_HEIGHT_KEY))
+      return Number.isFinite(saved) && saved >= 140 ? clampLogHeight(saved) : DEFAULT_LOG_HEIGHT
+    } catch {
+      return DEFAULT_LOG_HEIGHT
+    }
+  })
+  const [shellKind, setShellKind] = useState<ShellKind>(() => {
+    try {
+      const saved = localStorage.getItem(SHELL_KIND_KEY)
+      return saved === 'bash' || saved === 'cmd' ? saved : 'powershell'
+    } catch {
+      return 'powershell'
+    }
+  })
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [searchResult, setSearchResult] = useState<{ current: number; total: number }>({ current: 0, total: 0 })
+
   const projectId = view.kind === 'project' ? view.id : null
   const nameOf = (id: string) => projects.find((p) => p.id === id)?.name ?? id
 
@@ -79,6 +137,19 @@ export function LogPanel({ projects }: { projects: Project[] }) {
   const currentRun = selected?.kind === 'run' ? sessions[selected.id] : undefined
   const currentShell = selected?.kind === 'shell' ? shells.sessions[selected.id] : undefined
   const hasTabs = order.length > 0 || shells.order.length > 0
+
+  useEffect(() => {
+    setTerminalSearchHandler(() => {
+      setSearchOpen(true)
+      setTimeout(() => searchInputRef.current?.focus(), 0)
+    })
+    return () => setTerminalSearchHandler(null)
+  }, [])
+
+  const runSearch = (query: string, dir: 'next' | 'prev' = 'next') => {
+    if (!selected) return
+    setSearchResult(searchTerminal(selected.id, query, dir))
+  }
 
   const close = async (runId: string) => {
     try {
@@ -113,15 +184,18 @@ export function LogPanel({ projects }: { projects: Project[] }) {
             ? await unwrap(api.runner.buffer(selected.id))
             : ''
       await navigator.clipboard.writeText(stripAnsi(text))
-      toast.success('已复制')
+      toast.success('已复制全部日志')
     } catch (e) {
       toast.error(e, '复制失败')
     }
   }
 
-  const openShell = async () => {
+  const openShell = async (kind = shellKind) => {
     try {
-      const session = await unwrap(api.shell.open(projectId, 120, 24))
+      const w = bodyRef.current?.clientWidth || window.innerWidth
+      const cols = Math.max(80, Math.floor((w - 24) / 7.6))
+      const rows = Math.max(16, Math.floor((height - 16) / 16))
+      const session = await unwrap(api.shell.open(projectId, cols, rows, kind))
       ensureTerminal(session.id, true)
       shells.upsert(session)
       setLogTab({ kind: 'shell', id: session.id })
@@ -131,15 +205,40 @@ export function LogPanel({ projects }: { projects: Project[] }) {
     }
   }
 
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault()
+    const startY = e.clientY
+    const startH = height
+    let latest = startH
+    const onMove = (ev: PointerEvent) => {
+      latest = clampLogHeight(startH + (startY - ev.clientY))
+      setHeight(latest)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      try {
+        localStorage.setItem(LOG_HEIGHT_KEY, String(latest))
+      } catch {
+        // ignore
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const activeUrl = currentRun ? urls[currentRun.runId] : undefined
+
   return (
     <section className={`log-panel${open ? ' open' : ''}`}>
+      {open && hasTabs && <div className="log-resizer" title="上下拖动调整日志区高度" onPointerDown={startResize} />}
       <div className="log-header">
         <button className="icon-btn" title={open ? '收起' : '展开'} onClick={() => setOpen(!open)}>
           {open ? '▾' : '▸'}
         </button>
         <span className="log-title">日志</span>
         <div className="log-tabs">
-          {!hasTabs && <span className="hint">点「终端」可以在这里敲命令</span>}
+          {!hasTabs && <span className="hint">点右侧「＋终端」打开命令行（支持选中 Ctrl+C 复制、右键粘贴、Ctrl+F 搜索）</span>}
           {order.map((runId) => {
             const s = sessions[runId]
             const state = tabState(s, Boolean(stoppedByUser[runId]))
@@ -204,20 +303,58 @@ export function LogPanel({ projects }: { projects: Project[] }) {
           })}
         </div>
         <div className="log-actions">
+          {activeUrl && (
+            <button
+              className="btn btn-small"
+              title={activeUrl}
+              onClick={() => void api.app.openExternal(activeUrl)}
+            >
+              打开页面 ↗
+            </button>
+          )}
+          <select
+            className="shell-kind-select"
+            value={shellKind}
+            title="选择新建终端的 Shell 类型"
+            onChange={(e) => {
+              const next = e.target.value as ShellKind
+              setShellKind(next)
+              try {
+                localStorage.setItem(SHELL_KIND_KEY, next)
+              } catch {
+                // ignore
+              }
+            }}
+          >
+            <option value="powershell">PowerShell</option>
+            <option value="bash">Git Bash</option>
+            <option value="cmd">CMD</option>
+          </select>
           <button
             className="btn btn-small"
             title={projectId ? '在当前项目打开终端' : '在用户目录打开终端'}
             onClick={() => void openShell()}
           >
-            终端
+            ＋终端
           </button>
           {(currentRun || currentShell) && (
             <>
+              <button
+                className={`btn btn-small btn-ghost${searchOpen ? ' active' : ''}`}
+                title="在终端中搜索（Ctrl+F）"
+                onClick={() => {
+                  const next = !searchOpen
+                  setSearchOpen(next)
+                  if (next) setTimeout(() => searchInputRef.current?.focus(), 0)
+                }}
+              >
+                查找
+              </button>
               <button className="btn btn-small btn-ghost" onClick={() => selected && clearTerminal(selected.id)}>
                 清空
               </button>
               <button className="btn btn-small btn-ghost" onClick={() => void copy()}>
-                复制
+                复制全部
               </button>
             </>
           )}
@@ -228,7 +365,66 @@ export function LogPanel({ projects }: { projects: Project[] }) {
           )}
         </div>
       </div>
-      <div className="log-body" style={{ display: open && hasTabs ? 'block' : 'none' }}>
+      {open && hasTabs && searchOpen && (
+        <div className="log-search-bar">
+          <input
+            ref={searchInputRef}
+            value={searchText}
+            placeholder="输入关键词查找（Enter 下一个，Shift+Enter 上一个）"
+            onChange={(e) => {
+              setSearchText(e.target.value)
+              runSearch(e.target.value, 'next')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                runSearch(searchText, e.shiftKey ? 'prev' : 'next')
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                setSearchOpen(false)
+                if (selected) focusTerminal(selected.id)
+              }
+            }}
+          />
+          <span className="mono muted log-search-count">
+            {searchText ? `${searchResult.current}/${searchResult.total}` : '0/0'}
+          </span>
+          <button
+            className="btn btn-small btn-ghost"
+            type="button"
+            disabled={!searchText || searchResult.total === 0}
+            title="上一个（Shift+Enter）"
+            onClick={() => runSearch(searchText, 'prev')}
+          >
+            ↑
+          </button>
+          <button
+            className="btn btn-small btn-ghost"
+            type="button"
+            disabled={!searchText || searchResult.total === 0}
+            title="下一个（Enter）"
+            onClick={() => runSearch(searchText, 'next')}
+          >
+            ↓
+          </button>
+          <button
+            className="icon-btn"
+            type="button"
+            title="关闭查找（Esc）"
+            onClick={() => {
+              setSearchOpen(false)
+              if (selected) focusTerminal(selected.id)
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      <div
+        ref={bodyRef}
+        className="log-body"
+        style={{ display: open && hasTabs ? 'block' : 'none', height: `${height}px` }}
+      >
         {order.map((runId) => (
           <TerminalView key={runId} runId={runId} visible={open && selected?.kind === 'run' && selected.id === runId} />
         ))}

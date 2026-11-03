@@ -121,6 +121,7 @@ function TodoDispatch({
   const { agents, projects } = overview
   const lastAgent = prefs?.multica?.lastAgentId
   const [title, setTitle] = useState(item.text)
+  const [description, setDescription] = useState(item.text)
   const [projectId, setProjectId] = useState('')
   const [agentId, setAgentId] = useState(
     () => agents.find((a) => a.id === lastAgent)?.id ?? agents.find((a) => a.name === DEFAULT_AGENT)?.id ?? ''
@@ -131,7 +132,13 @@ function TodoDispatch({
     setBusy(true)
     try {
       const next = await unwrap(
-        api.todo.dispatch({ id: item.id, title: title.trim() || item.text, projectId: projectId || null, agentId: agentId || null })
+        api.todo.dispatch({
+          id: item.id,
+          title: title.trim() || item.text,
+          description: description.trim() || item.text,
+          projectId: projectId || null,
+          agentId: agentId || null
+        })
       )
       toast.success('已派单', title.trim() || item.text)
       await qc.invalidateQueries({ queryKey: qk.prefs })
@@ -150,6 +157,15 @@ function TodoDispatch({
         <label>
           <span>标题</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label>
+          <span>描述</span>
+          <textarea
+            rows={4}
+            value={description}
+            placeholder="补充任务背景、涉及页面或具体实现要求…"
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </label>
         <label>
           <span>multica 项目（{overview.workspace.name}）</span>

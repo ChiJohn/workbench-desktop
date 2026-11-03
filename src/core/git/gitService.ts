@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { BranchList, RepoStatus, WorktreeChange } from '../../shared/types'
+import type { BranchList, GitStashEntry, RepoStatus, WorktreeChange } from '../../shared/types'
 import { execCommand } from '../exec'
 import { AppError } from '../result'
 import { parseBranchList, parseLastCommit, parseStatusV2 } from './parseStatus'
@@ -59,6 +59,23 @@ export function parseLog(out: string): GitCommit[] {
         files: num(/(\d+) files? changed/),
         insertions: num(/(\d+) insertions?\(\+\)/),
         deletions: num(/(\d+) deletions?\(-\)/)
+      }
+    })
+}
+
+export function parseStashList(out: string): GitStashEntry[] {
+  return out
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [ref = '', age = '', ...rest] = line.split('\0')
+      const m = /stash@\{(\d+)\}/.exec(ref)
+      return {
+        index: m ? Number(m[1]) : 0,
+        ref,
+        age,
+        message: rest.join('\0').trim()
       }
     })
 }
@@ -130,16 +147,73 @@ export class GitService {
 
   async diff(repoPath: string, path: string): Promise<string> {
     const change = await this.requireChanged(repoPath, [path])
+    const root = await this.toplevel(repoPath)
     if (change[0].code === '??') {
-      const buf = await readFile(join(repoPath, path))
+      const buf = await readFile(join(root, path))
       if (buf.includes(0)) return `新文件 ${path}（二进制）`
       const text = buf.subarray(0, DIFF_MAX_BYTES).toString('utf8').replace(/\r\n/g, '\n').replace(/\n$/, '')
       return `新文件 ${path}\n${text.split('\n').map((l) => `+${l}`).join('\n')}`
     }
-    const out = await this.run(repoPath, ['-c', 'core.quotepath=off', 'diff', 'HEAD', '--', path], QUICK_TIMEOUT).catch(
-      () => this.run(repoPath, ['-c', 'core.quotepath=off', 'diff', '--cached', '--', path], QUICK_TIMEOUT)
+    let out = await this.run(root, ['-c', 'core.quotepath=off', 'diff', 'HEAD', '--', path], QUICK_TIMEOUT).catch(
+      () => this.run(root, ['-c', 'core.quotepath=off', 'diff', '--cached', '--', path], QUICK_TIMEOUT)
     )
+    if (!out.trim()) {
+      out = await this.run(root, ['-c', 'core.quotepath=off', 'diff', '--', path], QUICK_TIMEOUT).catch(() => '')
+    }
     return out.length > DIFF_MAX_BYTES ? `${out.slice(0, DIFF_MAX_BYTES)}\n…（diff 过长，已截断）` : out
+  }
+
+  /** 汇总选中文件的 diff 片段与最近提交标题，供 AI 生成 commit message（单次批量 git diff 避免逐文件起进程） */
+  async commitMaterial(
+    repoPath: string,
+    files: string[],
+    maxTotalChars = 4_500
+  ): Promise<{ files: WorktreeChange[]; diff: string; recentSubjects: string[] }> {
+    if (!files.length) throw new AppError('INVALID_COMMIT', '请先勾选要提交的文件')
+    const [matched, root] = await Promise.all([this.requireChanged(repoPath, files), this.toplevel(repoPath)])
+    const tracked = matched.filter((f) => f.code !== '??').map((f) => f.path)
+    const untracked = matched.filter((f) => f.code === '??').map((f) => f.path)
+
+    const [recentOut, trackedDiff] = await Promise.all([
+      this.run(root, ['log', '-5', '--format=%s'], QUICK_TIMEOUT).catch(() => ''),
+      tracked.length > 0
+        ? this.run(root, ['-c', 'core.quotepath=off', 'diff', 'HEAD', '--unified=1', '--', ...tracked], QUICK_TIMEOUT).catch(
+            () =>
+              this.run(root, ['-c', 'core.quotepath=off', 'diff', '--cached', '--unified=1', '--', ...tracked], QUICK_TIMEOUT).catch(
+                () => ''
+              )
+          )
+        : Promise.resolve('')
+    ])
+
+    const recentSubjects = recentOut
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    const chunks: string[] = []
+    if (trackedDiff.trim()) {
+      chunks.push(
+        trackedDiff.length > maxTotalChars
+          ? `${trackedDiff.slice(0, maxTotalChars)}\n…（diff 已截断）`
+          : trackedDiff.trim()
+      )
+    }
+
+    // 未跟踪的新文件只读取前 3 个文件的头部摘要，避免读取大量文件拖慢速度
+    for (const p of untracked.slice(0, 3)) {
+      if (chunks.join('\n').length >= maxTotalChars) break
+      const buf = await readFile(join(root, p)).catch(() => null)
+      if (!buf || buf.includes(0)) continue
+      const excerpt = buf.subarray(0, 500).toString('utf8').replace(/\r\n/g, '\n').trim()
+      if (excerpt) chunks.push(`新文件 ${p}:\n${excerpt}`)
+    }
+
+    return {
+      files: matched,
+      diff: chunks.join('\n\n'),
+      recentSubjects
+    }
   }
 
   /** 只提交选中的文件：commit 带路径时不会带上其他已暂存的改动 */
@@ -147,9 +221,34 @@ export class GitService {
     if (!files.length) throw new AppError('INVALID_COMMIT', '没有选择要提交的文件')
     if (!message.trim()) throw new AppError('INVALID_COMMIT', '提交信息不能为空')
     await this.requireChanged(repoPath, files)
-    await this.run(repoPath, ['add', '-A', '--', ...files], QUICK_TIMEOUT)
-    await this.run(repoPath, ['commit', '-m', message.trim(), '--', ...files], COMMIT_TIMEOUT)
-    return (await this.run(repoPath, ['rev-parse', '--short', 'HEAD'], QUICK_TIMEOUT)).trim()
+    const root = await this.toplevel(repoPath)
+    await this.run(root, ['add', '-A', '--', ...files], QUICK_TIMEOUT)
+    await this.run(root, ['commit', '-m', message.trim(), '--', ...files], COMMIT_TIMEOUT)
+    return (await this.run(root, ['rev-parse', '--short', 'HEAD'], QUICK_TIMEOUT)).trim()
+  }
+
+  async stashes(repoPath: string): Promise<GitStashEntry[]> {
+    const out = await this.run(repoPath, ['stash', 'list', '--format=%gd%x00%cr%x00%gs'], QUICK_TIMEOUT)
+    return parseStashList(out)
+  }
+
+  /** 贮藏全部本地改动（默认包含未跟踪文件 -u） */
+  async stashPush(repoPath: string, message?: string): Promise<void> {
+    const changes = await this.changes(repoPath)
+    if (changes.length === 0) throw new AppError('STASH_EMPTY', '当前工作区没有可贮藏的改动')
+    const args = ['stash', 'push', '-u']
+    if (message?.trim()) args.push('-m', message.trim())
+    await this.run(repoPath, args, SWITCH_TIMEOUT)
+  }
+
+  async stashPop(repoPath: string, index = 0): Promise<void> {
+    if (!Number.isInteger(index) || index < 0) throw new AppError('INVALID_STASH', '无效的贮藏编号')
+    await this.run(repoPath, ['stash', 'pop', `stash@{${index}}`], SWITCH_TIMEOUT)
+  }
+
+  async stashDrop(repoPath: string, index: number): Promise<void> {
+    if (!Number.isInteger(index) || index < 0) throw new AppError('INVALID_STASH', '无效的贮藏编号')
+    await this.run(repoPath, ['stash', 'drop', `stash@{${index}}`], QUICK_TIMEOUT)
   }
 
   async toplevel(repoPath: string): Promise<string> {

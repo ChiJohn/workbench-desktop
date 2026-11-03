@@ -80,26 +80,48 @@ describe('startCnbBuild', () => {
       throw new Error('should not call')
     }) as typeof fetch
     await expect(
-      startCnbBuild({ api: 'https://api.cnb.example.com', web: 'https://cnb.example.com', slug: 'g/r', token: 'x', branch: '-D', fetchImpl })
+      startCnbBuild({
+        api: 'https://api.cnb.example.com',
+        web: 'https://cnb.example.com',
+        slug: 'g/r',
+        token: 'x',
+        branch: '-D',
+        event: 'api_trigger_test',
+        fetchImpl
+      })
     ).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
   })
 
-  it('sends a web trigger event from the button config', async () => {
-    let sent = ''
-    const fetchImpl = (async (_url: string, init?: RequestInit) => {
-      sent = typeof init?.body === 'string' ? init.body : ''
-      return new Response(JSON.stringify({ success: true, sn: 'cnb-2', message: 'ok' }))
+  it('does not call CNB for a web button event', async () => {
+    const fetchImpl = (async () => {
+      throw new Error('should not call')
     }) as typeof fetch
-    await startCnbBuild({
-      api: 'https://api.cnb.example.com',
-      web: 'https://cnb.example.com',
-      slug: 'g/r',
-      token: 'x',
-      branch: 'test',
-      event: 'web_trigger_test_k8s_build',
-      env: { NAME_SPACE: 'saas-sit' },
-      fetchImpl
-    })
-    expect(JSON.parse(sent)).toMatchObject({ event: 'web_trigger_test_k8s_build', env: { NAME_SPACE: 'saas-sit' } })
+    await expect(
+      startCnbBuild({
+        api: 'https://api.cnb.example.com',
+        web: 'https://cnb.example.com',
+        slug: 'g/r',
+        token: 'x',
+        branch: 'test',
+        event: 'web_trigger_test_k8s_build',
+        env: { NAME_SPACE: 'saas-sit' },
+        fetchImpl
+      })
+    ).rejects.toMatchObject({ code: 'CNB_WEB_TRIGGER' })
+  })
+
+  it('includes the server message when CNB rejects the request', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({ message: 'event 必须是 api_trigger' }), { status: 400 })) as typeof fetch
+    await expect(
+      startCnbBuild({
+        api: 'https://api.cnb.example.com',
+        web: 'https://cnb.example.com',
+        slug: 'g/r',
+        token: 'x',
+        branch: 'test',
+        event: 'api_trigger_test',
+        fetchImpl
+      })
+    ).rejects.toMatchObject({ message: 'CNB 返回 400：event 必须是 api_trigger' })
   })
 })

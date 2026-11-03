@@ -5,6 +5,7 @@ import { Overview } from './components/Overview'
 import { ProjectDetail } from './components/ProjectDetail'
 import { ProjectList } from './components/ProjectList'
 import { ProjectDialog } from './components/ProjectDialog'
+import { BookmarksPage } from './components/BookmarksPage'
 import { KnowledgePage } from './components/KnowledgePage'
 import { ReportsPage } from './components/ReportsPage'
 import { Settings } from './components/Settings'
@@ -15,6 +16,7 @@ import { Toasts } from './components/Toasts'
 import { Toolbar } from './components/Toolbar'
 import { useApifoxStatus, useCnbStatus, useCnbSummary, useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
 import { DepositDialog } from './components/DepositDialog'
+import { CommandPalette } from './components/CommandPalette'
 import { useUi } from './stores/ui'
 import { useGlobalEvents } from './useGlobalEvents'
 
@@ -53,6 +55,7 @@ export function App() {
     if (view.kind === 'agents') return <AgentsPage overview={multica} projects={projects} />
     if (view.kind === 'reports') return <ReportsPage prefs={prefs.data} />
     if (view.kind === 'knowledge') return <KnowledgePage projects={projects} />
+    if (view.kind === 'bookmarks') return <BookmarksPage links={prefs.data?.quickLinks} />
     if (registry.isLoading) return <div className="page hint">读取项目列表…</div>
     if (registry.error) return <EmptyState message={`${registry.error.message}。可以在「设置」里用「初始化 vault」建一个新库`} />
     if (projects.length === 0) {
@@ -79,6 +82,7 @@ export function App() {
       <LogPanel projects={projects} />
       <DepositDialog projects={projects} />
       <ProjectDialog projects={projects} codeRoot={prefs.data?.codeRoot} />
+      <CommandPalette projects={projects} prefs={prefs.data} tapdItems={board.data?.items} />
       <StickyNote prefs={prefs.data} />
       <AssistantDock />
       <Toasts />

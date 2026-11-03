@@ -10,6 +10,7 @@ const DEFAULT_AGENT = '前端开发'
 
 interface Props {
   item: TapdItem
+  initialDescription?: string
   repoId: string | undefined
   overview: MulticaOverview
   prefs?: Prefs
@@ -17,7 +18,7 @@ interface Props {
   onClose(): void
 }
 
-export function DispatchDialog({ item, repoId, overview, prefs, initialTitle, onClose }: Props) {
+export function DispatchDialog({ item, initialDescription, repoId, overview, prefs, initialTitle, onClose }: Props) {
   const qc = useQueryClient()
   const openIssue = useUi((s) => s.openIssue)
   const { agents, projects } = overview
@@ -27,6 +28,7 @@ export function DispatchDialog({ item, repoId, overview, prefs, initialTitle, on
     () => agents.find((a) => a.id === lastAgent)?.id ?? agents.find((a) => a.name === DEFAULT_AGENT)?.id ?? agents[0]?.id ?? ''
   )
   const [title, setTitle] = useState(initialTitle?.trim() || item.title)
+  const [description, setDescription] = useState(initialDescription ?? '')
   const [busy, setBusy] = useState(false)
   const [skipDesigns, setSkipDesigns] = useState<string[]>([])
   const [skipApis, setSkipApis] = useState<string[]>([])
@@ -47,6 +49,7 @@ export function DispatchDialog({ item, repoId, overview, prefs, initialTitle, on
         api.multica.dispatch({
           tapdKey: item.key,
           title: title.trim(),
+          description,
           projectId: projectId || null,
           agentId: agentId || null,
           align: { skipDesigns, skipApis }
@@ -72,6 +75,15 @@ export function DispatchDialog({ item, repoId, overview, prefs, initialTitle, on
         <label>
           <span>标题</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </label>
+        <label>
+          <span>描述</span>
+          <textarea
+            rows={5}
+            value={description}
+            placeholder="补充任务描述、复现步骤或具体修改要求（默认预填 TAPD 正文）…"
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </label>
         <label>
           <span>multica 项目（{overview.workspace.name}）</span>

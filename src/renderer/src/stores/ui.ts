@@ -8,6 +8,7 @@ export type View =
   | { kind: 'agents' }
   | { kind: 'reports' }
   | { kind: 'knowledge' }
+  | { kind: 'bookmarks' }
   | { kind: 'settings' }
 
 interface UiState {
@@ -44,6 +45,25 @@ interface UiState {
   reportDraft: { kind: ReportKind; notes?: string } | null
   setReportDraft(draft: { kind: ReportKind; notes?: string }): void
   clearReportDraft(): void
+  /** 模块折叠状态：key → 是否收起 */
+  collapsedCards: Record<string, boolean>
+  toggleCard(key: string, defaultOpen?: boolean): void
+  /** Ctrl+P 全局命令面板 */
+  commandOpen: boolean
+  setCommandOpen(open: boolean): void
+}
+
+const COLLAPSED_STORAGE_KEY = 'wb.collapsedCards'
+
+function loadCollapsedCards(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, boolean>) : {}
+  } catch {
+    return {}
+  }
 }
 
 export const useUi = create<UiState>((set) => ({
@@ -71,5 +91,19 @@ export const useUi = create<UiState>((set) => ({
   clearDispatchDraft: () => set({ dispatchDraft: null }),
   reportDraft: null,
   setReportDraft: (reportDraft) => set({ reportDraft }),
-  clearReportDraft: () => set({ reportDraft: null })
+  clearReportDraft: () => set({ reportDraft: null }),
+  collapsedCards: loadCollapsedCards(),
+  toggleCard: (key, defaultOpen = true) =>
+    set((state) => {
+      const currentCollapsed = state.collapsedCards[key] ?? !defaultOpen
+      const next = { ...state.collapsedCards, [key]: !currentCollapsed }
+      try {
+        localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // ignore storage errors
+      }
+      return { collapsedCards: next }
+    }),
+  commandOpen: false,
+  setCommandOpen: (commandOpen) => set({ commandOpen })
 }))

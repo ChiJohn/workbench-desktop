@@ -7,9 +7,12 @@ interface RunsState {
   active: string | null
   /** 用户主动停止的实例；它们的非零退出码不算失败 */
   stoppedByUser: Record<string, true>
+  /** 从脚本输出流嗅探到的本地服务地址：runId → url */
+  urls: Record<string, string>
   upsert(session: RunSession): void
   markExited(runId: string, exitCode: number | null): void
   markStopping(runId: string): void
+  setUrl(runId: string, url: string): void
   remove(runId: string): void
   setActive(runId: string | null): void
 }
@@ -19,6 +22,7 @@ export const useRuns = create<RunsState>((set, get) => ({
   order: [],
   active: null,
   stoppedByUser: {},
+  urls: {},
   upsert: (session) => {
     const { sessions, order } = get()
     const prev = sessions[session.runId]
@@ -29,19 +33,28 @@ export const useRuns = create<RunsState>((set, get) => ({
     })
   },
   markExited: (runId, exitCode) => {
-    const { sessions } = get()
+    const { sessions, urls } = get()
     const s = sessions[runId]
     if (!s) return
-    set({ sessions: { ...sessions, [runId]: { ...s, status: 'exited', exitCode } } })
+    const nextUrls = { ...urls }
+    delete nextUrls[runId]
+    set({ sessions: { ...sessions, [runId]: { ...s, status: 'exited', exitCode } }, urls: nextUrls })
   },
   markStopping: (runId) => set({ stoppedByUser: { ...get().stoppedByUser, [runId]: true } }),
+  setUrl: (runId, url) => {
+    if (get().urls[runId] === url) return
+    set({ urls: { ...get().urls, [runId]: url } })
+  },
   remove: (runId) => {
-    const { sessions, order, active } = get()
+    const { sessions, order, active, urls } = get()
     const rest = { ...sessions }
     delete rest[runId]
+    const nextUrls = { ...urls }
+    delete nextUrls[runId]
     const nextOrder = order.filter((id) => id !== runId)
     set({
       sessions: rest,
+      urls: nextUrls,
       order: nextOrder,
       active: active === runId ? (nextOrder[nextOrder.length - 1] ?? null) : active
     })

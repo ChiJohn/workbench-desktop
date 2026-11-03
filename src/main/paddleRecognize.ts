@@ -1,97 +1,162 @@
-import { spawn } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { app } from 'electron'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { parseOcrResult } from '../core/ocr/parseResult'
 import type { InboxRecognition } from '../core/knowledge/inbox'
 
+const HOST = '127.0.0.1'
+const PORT = Number(process.env.WORKBENCH_OCR_PORT || 17890)
+const BASE = `http://${HOST}:${PORT}`
+const START_TIMEOUT_MS = 120_000
 const TEXT_TIMEOUT_MS = 180_000
 const MEANING_TIMEOUT_MS = 600_000
 const PROBE_TIMEOUT_MS = 120_000
+const HEALTH_POLL_MS = 400
 
-const SCRIPT = `
-import json, os, sys
-# Paddle 3.3 on Windows CPU hits an oneDNN bug. Plain inference still works.
-os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
-os.environ["PADDLE_PDX_MODEL_SOURCE"] = "modelscope"
-os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
-path, mode = sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "all"
-text, meaning, errors = "", "", []
+let child: ChildProcess | null = null
+let starting: Promise<void> | null = null
+let pythonWithPaddle: string | null = null
 
-def texts_from(result):
-    lines = []
-    for item in result or []:
-        data = item
-        if hasattr(item, "json"):
-            try:
-                data = item.json
-            except Exception:
-                data = item
-        if isinstance(data, dict):
-            res = data.get("res") or data
-            if isinstance(res, dict) and res.get("rec_texts"):
-                lines.extend(str(x) for x in res.get("rec_texts") or [])
-        elif isinstance(item, list):
-            for line in item:
-                if isinstance(line, list) and len(line) > 1 and isinstance(line[1], (list, tuple)) and line[1]:
-                    lines.append(str(line[1][0]))
-    return "\\n".join(x for x in lines if x).strip()
-
-if mode in ("text", "all"):
-    try:
-        from paddleocr import PaddleOCR
-        ocr = PaddleOCR(lang="ch")
-        if hasattr(ocr, "predict"):
-            text = texts_from(ocr.predict(path))
-        else:
-            text = texts_from(ocr.ocr(path, cls=False))
-    except Exception as exc:
-        errors.append("文字识别失败：" + str(exc))
-
-if mode in ("meaning", "all"):
-    try:
-        from paddleocr import PaddleOCRVL
-        vl = PaddleOCRVL()
-        parts = []
-        for item in vl.predict(path) or []:
-            md = getattr(item, "markdown", None)
-            if md is None and isinstance(item, dict):
-                md = item.get("markdown")
-            if isinstance(md, dict):
-                parts.append(str(md.get("markdown_texts") or md.get("text") or ""))
-            elif isinstance(md, str):
-                parts.append(md)
-        meaning = "\\n".join(x for x in parts if x).strip()
-    except Exception as exc:
-        errors.append("图意识别失败：" + str(exc))
-
-print(json.dumps({"text": text, "meaning": meaning, "error": "；".join(errors)}, ensure_ascii=False))
-`
-
-/** 本机有 Paddle 就识别，没有就把原因带回，不挡住归档 */
+/** 本机有 OCR 服务就识别；没有就把原因带回，不挡住归档 */
 export async function recognizeImage(imagePath: string): Promise<InboxRecognition> {
-  const python = await findPython()
-  if (!python) return { text: '', meaning: '', warning: '本机没有 Python，图片已归档，文字和图意没有识别' }
-  const dir = await mkdtemp(join(tmpdir(), 'wb-paddle-'))
-  const script = join(dir, 'recognize.py')
   try {
-    await writeFile(script, SCRIPT, 'utf8')
-    const textResult = await runJob(python, script, imagePath, 'text', TEXT_TIMEOUT_MS, '文字')
-    const meaningResult = await runJob(python, script, imagePath, 'meaning', MEANING_TIMEOUT_MS, '图意')
-    const warning = [textResult.error, meaningResult.error].filter(Boolean).join('；')
-    return {
-      text: textResult.text.trim(),
-      meaning: meaningResult.meaning.trim(),
-      warning: warning || undefined
-    }
+    await ensureOcrService()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { text: '', meaning: '', warning: `识别没有完成：${message}` }
-  } finally {
-    await rm(dir, { recursive: true, force: true })
+    return { text: '', meaning: '', warning: message }
+  }
+  const textResult = await postOcr(imagePath, 'text', TEXT_TIMEOUT_MS, '文字')
+  const meaningResult = await postOcr(imagePath, 'meaning', MEANING_TIMEOUT_MS, '图意')
+  const warning = [textResult.error, meaningResult.error].filter(Boolean).join('；')
+  return {
+    text: textResult.text.trim(),
+    meaning: meaningResult.meaning.trim(),
+    warning: warning || undefined
   }
 }
 
-let pythonWithPaddle: string | null = null
+export function stopOcrService(): void {
+  if (!child?.pid) {
+    child = null
+    return
+  }
+  killTree(child.pid)
+  child = null
+}
+
+export async function ensureOcrService(): Promise<void> {
+  const status = await health()
+  if (status?.ok) {
+    if (status.paddle === false) throw new Error('本机 Python 没有安装 paddleocr，图片已归档，文字和图意没有识别')
+    return
+  }
+  if (starting) return starting
+  starting = startServer().finally(() => {
+    starting = null
+  })
+  return starting
+}
+
+function serverScript(): string {
+  const candidates = [
+    join(process.resourcesPath || '', 'ocr-server', 'server.py'),
+    join(app.getAppPath(), 'ocr-server', 'server.py'),
+    join(__dirname, '../../ocr-server/server.py'),
+    join(process.cwd(), 'ocr-server', 'server.py')
+  ]
+  const found = candidates.find((path) => path && existsSync(path))
+  if (!found) throw new Error('没有找到 OCR 服务脚本 ocr-server/server.py')
+  return found
+}
+
+async function startServer(): Promise<void> {
+  const existing = await health()
+  if (existing?.ok) {
+    if (existing.paddle === false) throw new Error('本机 Python 没有安装 paddleocr，图片已归档，文字和图意没有识别')
+    return
+  }
+  const python = await findPython()
+  if (!python) throw new Error('本机没有 Python，图片已归档，文字和图意没有识别')
+  const script = serverScript()
+  if (child?.pid) killTree(child.pid)
+  child = spawn(python, [script], {
+    windowsHide: true,
+    stdio: ['ignore', 'ignore', 'pipe'],
+    env: { ...process.env, WORKBENCH_OCR_PORT: String(PORT) }
+  })
+  child.stderr?.setEncoding('utf8')
+  let bootLog = ''
+  child.stderr?.on('data', (chunk: string) => {
+    bootLog = (bootLog + chunk).slice(-2000)
+  })
+  child.once('exit', () => {
+    child = null
+  })
+  child.once('error', () => {
+    child = null
+  })
+  const deadline = Date.now() + START_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    const status = await health()
+    if (status?.ok) {
+      if (status.paddle === false) {
+        stopOcrService()
+        throw new Error('本机 Python 没有安装 paddleocr，图片已归档，文字和图意没有识别')
+      }
+      return
+    }
+    if (!child) {
+      const reused = await health()
+      if (reused?.ok) {
+        if (reused.paddle === false) throw new Error('本机 Python 没有安装 paddleocr，图片已归档，文字和图意没有识别')
+        return
+      }
+      throw new Error(`OCR 服务启动失败${bootLog.trim() ? `：${bootLog.trim().slice(-300)}` : ''}`)
+    }
+    await sleep(HEALTH_POLL_MS)
+  }
+  stopOcrService()
+  throw new Error('OCR 服务启动超时')
+}
+
+async function health(): Promise<{ ok: boolean; paddle?: boolean } | null> {
+  try {
+    const response = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(2_000) })
+    if (!response.ok) return null
+    return (await response.json()) as { ok: boolean; paddle?: boolean }
+  } catch {
+    return null
+  }
+}
+
+async function postOcr(
+  imagePath: string,
+  mode: 'text' | 'meaning' | 'all',
+  timeoutMs: number,
+  label: string
+): Promise<{ text: string; meaning: string; error?: string }> {
+  try {
+    const response = await fetch(`${BASE}/ocr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: imagePath, mode }),
+      signal: AbortSignal.timeout(timeoutMs)
+    })
+    const raw = await response.text()
+    const parsed = parseOcrResult(raw)
+    if (!response.ok && !parsed.error) {
+      return { text: '', meaning: '', error: `${label}识别没有完成：HTTP ${response.status}` }
+    }
+    return parsed
+  } catch (error) {
+    return {
+      text: '',
+      meaning: '',
+      error: `${label}识别没有完成：${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+}
 
 /** 优先用已经装了 paddleocr 的解释器。Windows 上 `py` 默认可能是 3.14，Paddle 没有这个版本的包。 */
 async function findPython(): Promise<string | null> {
@@ -122,52 +187,24 @@ function lastLine(text: string): string | null {
   return line || null
 }
 
-function runJob(
-  python: string,
-  script: string,
-  imagePath: string,
-  mode: string,
-  timeoutMs: number,
-  label: string
-): Promise<{ text: string; meaning: string; error?: string }> {
-  return run(python, [script, imagePath, mode], timeoutMs)
-    .then((raw) => parseResult(raw))
-    .catch((error: unknown) => ({
-      text: '',
-      meaning: '',
-      error: `${label}识别没有完成：${error instanceof Error ? error.message : String(error)}`
-    }))
-}
-
-function parseResult(raw: string): { text: string; meaning: string; error?: string } {
-  const line = raw
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter((item) => item.startsWith('{'))
-    .at(-1)
-  if (!line) throw new Error(raw.trim().slice(0, 400) || '没有返回结果')
-  const parsed = JSON.parse(line) as { text?: string; meaning?: string; error?: string }
-  return { text: parsed.text || '', meaning: parsed.meaning || '', error: parsed.error?.trim() || undefined }
-}
-
 function run(command: string, args: string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const proc = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
     const timer = setTimeout(() => {
-      killTree(child.pid)
+      killTree(proc.pid)
       reject(new Error('识别超时'))
     }, timeoutMs)
-    child.stdout?.setEncoding('utf8')
-    child.stderr?.setEncoding('utf8')
-    child.stdout?.on('data', (chunk: string) => (stdout += chunk))
-    child.stderr?.on('data', (chunk: string) => (stderr += chunk))
-    child.on('error', (error) => {
+    proc.stdout?.setEncoding('utf8')
+    proc.stderr?.setEncoding('utf8')
+    proc.stdout?.on('data', (chunk: string) => (stdout += chunk))
+    proc.stderr?.on('data', (chunk: string) => (stderr += chunk))
+    proc.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
     })
-    child.on('close', (code) => {
+    proc.on('close', (code) => {
       clearTimeout(timer)
       if (code !== 0 && !stdout.trim()) reject(new Error(stderr.trim().slice(-500) || `退出码 ${code}`))
       else resolve(stdout.trim())
@@ -186,4 +223,8 @@ function killTree(pid: number | undefined): void {
   } catch {
     /* already gone */
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

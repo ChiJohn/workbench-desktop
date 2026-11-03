@@ -102,6 +102,7 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
     }
     if (id === 'reports') return <button key={id} {...drag} className={`${navClass('reports')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'reports' }))}>汇报</button>
     if (id === 'knowledge') return <button key={id} {...drag} className={`${navClass('knowledge')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'knowledge' }))}>知识</button>
+    if (id === 'bookmarks') return <button key={id} {...drag} className={`${navClass('bookmarks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'bookmarks' }))}>收藏</button>
     if (id === 'fetch') {
       return (
         <button key={id} {...drag} className={`btn${dragging === id ? ' dragging' : ''}`} disabled={fetchAll.isPending} onClick={click(() => fetchAll.mutate())}>
@@ -127,6 +128,15 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
         {order.map((id) =>
           id === 'gap' ? <div key={id} className="toolbar-gap" data-tool="gap" onDragOver={onDragOver('gap')} /> : button(id)
         )}
+        <button
+          type="button"
+          className="btn btn-ghost cmdk-trigger"
+          title="全局搜索与命令面板（Ctrl+P）"
+          onClick={() => useUi.getState().setCommandOpen(true)}
+        >
+          搜索
+          <span className="cmdk-kbd mono">Ctrl+P</span>
+        </button>
       </nav>
     </header>
   )

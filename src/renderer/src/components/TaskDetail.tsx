@@ -21,7 +21,17 @@ function linkedRepo(item: TapdItem, prefs?: Prefs): string | undefined {
   return item.iterationId ? prefs?.tapd?.iterationRepos?.[item.iterationId] : prefs?.tapd?.itemRepos?.[item.key]
 }
 
-function DispatchButton({ item, repoId, prefs }: { item: TapdItem; repoId: string | undefined; prefs?: Prefs }) {
+function DispatchButton({
+  item,
+  description,
+  repoId,
+  prefs
+}: {
+  item: TapdItem
+  description: string
+  repoId: string | undefined
+  prefs?: Prefs
+}) {
   const existing = useMulticaByTapd(item.key)
   const overview = useMulticaOverview()
   const openIssue = useUi((s) => s.openIssue)
@@ -61,7 +71,15 @@ function DispatchButton({ item, repoId, prefs }: { item: TapdItem; repoId: strin
         派给智能体
       </button>
       {open && overview.data && (
-        <DispatchDialog item={item} repoId={repoId} overview={overview.data} prefs={prefs} initialTitle={initialTitle} onClose={() => setOpen(false)} />
+        <DispatchDialog
+          item={item}
+          initialDescription={description}
+          repoId={repoId}
+          overview={overview.data}
+          prefs={prefs}
+          initialTitle={initialTitle}
+          onClose={() => setOpen(false)}
+        />
       )}
     </>
   )
@@ -195,7 +213,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
             生成任务卡
           </button>
         )}
-        <DispatchButton item={item} repoId={repoId} prefs={prefs} />
+        <DispatchButton item={item} description={description} repoId={repoId} prefs={prefs} />
       </div>
 
       {transitions.length > 0 && (

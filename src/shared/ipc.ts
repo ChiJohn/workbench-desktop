@@ -17,6 +17,11 @@ import type {
   CnbBuildStart,
   CnbTriggers,
   CnbSummaryItem,
+  UaDashboardOpen,
+  UaDiffImpact,
+  UaGraphStatus,
+  UaSyncResult,
+  UaTerminalPlan,
   CloneProgress,
   CloneRequest,
   RegistryResult,
@@ -27,6 +32,7 @@ import type {
   ReportKind,
   ReportMaterial,
   ReportRange,
+  ReportWriter,
   KnowledgeAnswer,
   KnowledgeAskRequest,
   KnowledgeDraft,
@@ -43,6 +49,7 @@ import type {
   RunSession,
   ShellBuffer,
   ShellExitEvent,
+  ShellKind,
   ShellOutputEvent,
   ShellSession,
   ScriptsInfo,
@@ -52,6 +59,7 @@ import type {
   AlignState,
   VaultInitResult,
   WorktreeChange,
+  GitStashEntry,
   TodoItem
 } from './types'
 
@@ -98,6 +106,15 @@ export const Channels = {
   cnbSummary: 'cnb.summary',
   cnbTriggers: 'cnb.triggers',
   cnbStart: 'cnb.start',
+  uaGraphStatus: 'ua.graphStatus',
+  uaOpenDashboard: 'ua.openDashboard',
+  uaStopDashboard: 'ua.stopDashboard',
+  uaPrepareTerminal: 'ua.prepareTerminal',
+  uaSyncToVault: 'ua.syncToVault',
+  uaDiffImpact: 'ua.diffImpact',
+  uaVaultStatus: 'ua.vaultStatus',
+  uaOpenVaultDashboard: 'ua.openVaultDashboard',
+  uaStopVaultDashboard: 'ua.stopVaultDashboard',
   alignList: 'align.list',
   alignAdd: 'align.add',
   alignRefresh: 'align.refresh',
@@ -106,6 +123,12 @@ export const Channels = {
   alignMcpSnippet: 'align.mcpSnippet',
   gitChanges: 'git.changes',
   gitDiff: 'git.diff',
+  gitCommit: 'git.commit',
+  gitGenerateCommitMsg: 'git.generateCommitMsg',
+  gitStashes: 'git.stashes',
+  gitStashPush: 'git.stashPush',
+  gitStashPop: 'git.stashPop',
+  gitStashDrop: 'git.stashDrop',
   gitRemoteWeb: 'git.remoteWeb',
   multicaOverview: 'multica.overview',
   multicaIssue: 'multica.issue',
@@ -125,6 +148,7 @@ export const Channels = {
   knowledgeDraft: 'knowledge.draft',
   knowledgeSave: 'knowledge.save',
   knowledgeIngest: 'knowledge.ingest',
+  knowledgeIngestClipboard: 'knowledge.ingestClipboard',
   assistantSend: 'assistant.send',
   assistantConfirm: 'assistant.confirm',
   assistantCancel: 'assistant.cancel',
@@ -136,6 +160,7 @@ export const Channels = {
   projectCancelClone: 'project.cancelClone',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
+  settingsRestoreFromVault: 'settings.restoreFromVault',
   vaultInit: 'vault.init',
   appPickFolder: 'app.pickFolder',
   appOpenExternal: 'app.openExternal',
@@ -187,6 +212,12 @@ export interface WorkbenchApi {
     createBranch(projectId: string, branch: string): Promise<Result<null>>
     changes(projectId: string): Promise<Result<WorktreeChange[]>>
     diff(projectId: string, path: string): Promise<Result<string>>
+    commit(projectId: string, files: string[], message: string): Promise<Result<string>>
+    generateCommitMsg(projectId: string, files: string[], writer?: ReportWriter): Promise<Result<string>>
+    stashes(projectId: string): Promise<Result<GitStashEntry[]>>
+    stashPush(projectId: string, message?: string): Promise<Result<null>>
+    stashPop(projectId: string, index: number): Promise<Result<null>>
+    stashDrop(projectId: string, index: number): Promise<Result<null>>
     /** 仓库 origin 对应的网页地址；没有远程时为 null */
     remoteWeb(projectId: string): Promise<Result<string | null>>
   }
@@ -211,8 +242,8 @@ export interface WorkbenchApi {
     dispose(runId: string): Promise<Result<null>>
   }
   shell: {
-    /** projectId 为空时在用户目录打开 */
-    open(projectId: string | null, cols: number, rows: number): Promise<Result<ShellSession>>
+    /** projectId 为空时在用户目录打开；支持指定 shell 类型（powershell / bash / cmd） */
+    open(projectId: string | null, cols: number, rows: number, kind?: ShellKind): Promise<Result<ShellSession>>
     write(id: string, data: string): Promise<Result<null>>
     resize(id: string, cols: number, rows: number): Promise<Result<null>>
     close(id: string): Promise<Result<null>>
@@ -253,6 +284,17 @@ export interface WorkbenchApi {
     /** 按按钮名称触发。名称必须是当前分支匹配到的按钮 */
     start(projectId: string, branch: string, name: string): Promise<Result<CnbBuildStart>>
   }
+  ua: {
+    graphStatus(projectId: string): Promise<Result<UaGraphStatus>>
+    openDashboard(projectId: string): Promise<Result<UaDashboardOpen>>
+    stopDashboard(projectId: string): Promise<Result<null>>
+    prepareTerminal(projectId: string): Promise<Result<UaTerminalPlan>>
+    syncToVault(projectId: string): Promise<Result<UaSyncResult>>
+    diffImpact(projectId: string, paths: string[]): Promise<Result<UaDiffImpact | null>>
+    vaultStatus(): Promise<Result<UaGraphStatus>>
+    openVaultDashboard(): Promise<Result<UaDashboardOpen>>
+    stopVaultDashboard(): Promise<Result<null>>
+  }
   align: {
     list(tapdKey: string): Promise<Result<AlignState>>
     add(tapdKey: string, url: string): Promise<Result<AlignState>>
@@ -277,6 +319,7 @@ export interface WorkbenchApi {
     draft(req: KnowledgeDraftRequest): Promise<Result<KnowledgeDraft>>
     save(req: KnowledgeSaveRequest): Promise<Result<string>>
     ingest(paths: string[]): Promise<Result<InboxItem[]>>
+    ingestClipboard(): Promise<Result<InboxItem>>
   }
   assistant: {
     send(text: string, context: AssistantContext): Promise<Result<AssistantTurn>>
@@ -294,6 +337,7 @@ export interface WorkbenchApi {
   settings: {
     get(): Promise<Result<Prefs>>
     set(patch: PrefsPatch): Promise<Result<Prefs>>
+    restoreFromVault(): Promise<Result<Prefs>>
   }
   vault: {
     /** 建好目录骨架，不覆盖已有文件，并把 vault 路径切到这里 */
@@ -316,7 +360,13 @@ export interface WorkbenchApi {
     toggle(id: string): Promise<Result<TodoItem[]>>
     remove(id: string): Promise<Result<TodoItem[]>>
     /** 返回派单后的列表 */
-    dispatch(req: { id: string; title: string; projectId: string | null; agentId: string | null }): Promise<Result<TodoItem[]>>
+    dispatch(req: {
+      id: string
+      title: string
+      description?: string
+      projectId: string | null
+      agentId: string | null
+    }): Promise<Result<TodoItem[]>>
   }
   on: {
     registryChanged(cb: () => void): Unsubscribe

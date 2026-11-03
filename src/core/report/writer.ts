@@ -18,7 +18,16 @@ export interface WriterFs {
   list(dir: string): string[]
 }
 
-const claudeArgs = (tools: string) => ['-p', '--output-format', 'stream-json', '--verbose', '--tools', tools, '--no-session-persistence']
+const claudeArgs = (tools: string, fast = false) => [
+  '-p',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--tools',
+  tools,
+  '--no-session-persistence',
+  ...(fast ? ['--strict-mcp-config', '--effort', 'low', '--setting-sources', 'user'] : [])
+]
 const CLAUDE_EXE = join('node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
 
 function findClaude(custom: string | undefined, env: NodeJS.ProcessEnv, fs: WriterFs): string | null {
@@ -80,7 +89,14 @@ function findCodex(custom: string | undefined, env: NodeJS.ProcessEnv, fs: Write
 }
 
 export function resolveWriter(
-  opts: { writer?: ReportWriter; claudePath?: string; cursorAgentPath?: string; codexPath?: string; workspace: string; profile?: 'report' | 'ask' },
+  opts: {
+    writer?: ReportWriter
+    claudePath?: string
+    cursorAgentPath?: string
+    codexPath?: string
+    workspace: string
+    profile?: 'report' | 'ask' | 'fast'
+  },
   env: NodeJS.ProcessEnv,
   fs: WriterFs
 ): WriterCommand {
@@ -88,7 +104,12 @@ export function resolveWriter(
   if (writer === 'claude') {
     const command = findClaude(opts.claudePath?.trim(), env, fs)
     if (!command) throw new AppError('REPORT_WRITER_MISSING', '找不到 Claude Code CLI（claude.exe），可在设置「汇报」中指定路径')
-    return { writer, command, args: claudeArgs(opts.profile === 'ask' ? 'Read,Grep,Glob' : ''), format: 'stream-json' }
+    return {
+      writer,
+      command,
+      args: claudeArgs(opts.profile === 'ask' ? 'Read,Grep,Glob' : '', opts.profile === 'fast'),
+      format: 'stream-json'
+    }
   }
   if (writer === 'codex') {
     const found = findCodex(opts.codexPath, env, fs)
@@ -116,7 +137,7 @@ const firstLine = (text: string) =>
   text
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .find(Boolean) ?? ''
+    .find((l) => Boolean(l) && !/^cursor-retrieval:\s*tracing to\b/i.test(l)) ?? ''
 
 interface StreamEvent {
   type?: string

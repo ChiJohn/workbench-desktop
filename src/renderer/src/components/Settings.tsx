@@ -1,10 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, type FormEvent } from 'react'
-import type { Prefs, QuickLink, RegistryResult, TapdBoard, TapdStatus } from '../../../shared/types'
-import { DEFAULT_QUICK_LINKS } from '../../../shared/quickLinks'
+import type { Prefs, RegistryResult, TapdBoard, TapdStatus } from '../../../shared/types'
 import { api, unwrap } from '../api'
 import { qk, refreshTapdBoard, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
+import { useUi } from '../stores/ui'
 import { MulticaSettings } from './MulticaSettings'
 import { KnowledgeSettings } from './KnowledgeSettings'
 import { ReportSettings } from './ReportSettings'
@@ -161,54 +161,15 @@ function ApifoxSettings({ status }: { status?: TapdStatus }) {
   )
 }
 
-function QuickLinkSettings({ links }: { links?: QuickLink[] }) {
-  const save = useSavePrefs()
-  const [rows, setRows] = useState<QuickLink[] | null>(null)
-  const value = rows ?? links ?? DEFAULT_QUICK_LINKS
-
-  const setRow = (index: number, patch: Partial<QuickLink>) =>
-    setRows(value.map((row, i) => (i === index ? { ...row, ...patch } : row)))
-
-  const submit = () => {
-    const quickLinks = value.map((r) => ({ name: r.name.trim(), url: r.url.trim() })).filter((r) => r.name && r.url)
-    save.mutate(
-      { quickLinks },
-      {
-        onSuccess: () => {
-          setRows(null)
-          toast.success('快速入口已保存')
-        }
-      }
-    )
-  }
-
+function QuickLinkSettings() {
+  const setView = useUi((s) => s.setView)
   return (
-    <section className="card form">
-      <h2>快速入口</h2>
-      {value.map((row, i) => (
-        <div key={i} className="knowledge-row">
-          <input className="quick-link-name" placeholder="名称" value={row.name} onChange={(e) => setRow(i, { name: e.target.value })} />
-          <input className="mono" placeholder="https://…" value={row.url} onChange={(e) => setRow(i, { url: e.target.value })} />
-          <button className="btn btn-small" type="button" onClick={() => setRows(value.filter((_, x) => x !== i))}>
-            删除
-          </button>
-        </div>
-      ))}
-      <div className="button-row">
-        <button className="btn btn-small" type="button" onClick={() => setRows([...value, { name: '', url: '' }])}>
-          添加一行
-        </button>
-        {links === undefined && rows === null && (
-          <button className="btn btn-small btn-ghost" type="button" onClick={() => setRows(DEFAULT_QUICK_LINKS)}>
-            编辑默认列表
-          </button>
-        )}
-        <span className="spacer" />
-        <button className="btn btn-primary btn-small" type="button" disabled={save.isPending || rows === null} onClick={submit}>
-          {save.isPending ? '保存中…' : '保存'}
-        </button>
-      </div>
-      <small className="hint">显示在侧栏底部，点击用系统浏览器打开。名称或地址留空的行会被忽略。</small>
+    <section className="card">
+      <h2>收藏</h2>
+      <p className="hint">工具网站在顶栏「收藏」里添加。钉住的会出现在侧栏底部。</p>
+      <button className="btn btn-small" type="button" onClick={() => setView({ kind: 'bookmarks' })}>
+        打开收藏
+      </button>
     </section>
   )
 }
@@ -245,7 +206,7 @@ function CnbSettings({ status }: { status?: TapdStatus }) {
           value={token}
           onChange={(e) => setToken(e.target.value)}
         />
-        <small>读取记录需要构建历史只读权限。触发构建还需要 repo-cnb-trigger:rw。按钮来自 origin 上的 .cnb/web_trigger.yml，只启用当前分支匹配的项。令牌加密保存，只在主进程使用</small>
+        <small>读取记录需要构建历史只读权限。触发构建还需要 repo-cnb-trigger:rw，并且事件必须是 api_trigger。页面按钮 web_trigger 不能从这里触发。令牌加密保存，只在主进程使用</small>
       </label>
       <div className="button-row">
         <button className="btn btn-primary" disabled={busy || !token.trim()} onClick={() => void applyToken(token)}>
@@ -320,11 +281,30 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
         codeRoot: form.codeRoot?.trim() ?? '',
         hotkey: form.hotkey.trim(),
         terminal: form.terminal,
+        autoLaunch: Boolean(form.autoLaunch),
         wechatDevtoolsCli: form.wechatDevtoolsCli?.trim() || undefined,
         wechatDevtoolsToken: form.wechatDevtoolsToken?.trim() || undefined
       },
-      { onSuccess: () => toast.success('设置已保存') }
+      { onSuccess: () => toast.success('设置已保存（已自动同步备份至 Vault）') }
     )
+  }
+
+  const restoreFromVault = async () => {
+    if (
+      !window.confirm(
+        '从当前 Vault（.workbench/prefs-backup.json）恢复偏好配置？\n将恢复项目置顶、常用脚本、TAPD/Multica 映射和收藏入口，不影响本机已保存的加密令牌。'
+      )
+    ) {
+      return
+    }
+    try {
+      const next = await unwrap(api.settings.restoreFromVault())
+      qc.setQueryData(qk.prefs, next)
+      setForm(next)
+      toast.success('已从 Vault 恢复偏好配置')
+    } catch (e) {
+      toast.error(e, '恢复配置失败')
+    }
   }
 
   return (
@@ -373,6 +353,14 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
             <option value="powershell">PowerShell</option>
           </select>
         </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={Boolean(form.autoLaunch)}
+            onChange={(e) => set('autoLaunch', e.target.checked)}
+          />
+          开机自动启动并静默驻留系统托盘
+        </label>
         <label>
           <span>微信开发者工具 cli.bat</span>
           <input
@@ -398,6 +386,9 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
           <button className="btn btn-primary" type="submit" disabled={save.isPending}>
             {save.isPending ? '保存中…' : '保存'}
           </button>
+          <button className="btn" type="button" disabled={save.isPending} onClick={() => void restoreFromVault()}>
+            从 Vault 恢复偏好配置
+          </button>
         </div>
       </form>
 
@@ -413,7 +404,7 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
 
       <KnowledgeSettings prefs={prefs?.knowledge ?? {}} />
 
-      <QuickLinkSettings links={prefs?.quickLinks} />
+      <QuickLinkSettings />
 
       <section className="card">
         <h2>仓库映射</h2>
