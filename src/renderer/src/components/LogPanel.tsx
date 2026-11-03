@@ -6,7 +6,7 @@ import { stopScript } from '../queries'
 import { useRuns } from '../stores/runs'
 import { useShells } from '../stores/shells'
 import { toast } from '../stores/toast'
-import { useUi } from '../stores/ui'
+import { useUi, type LogDock } from '../stores/ui'
 import {
   attachTerminal,
   bindTerminalInput,
@@ -21,22 +21,38 @@ import {
 } from '../terminals'
 
 const LOG_HEIGHT_KEY = 'wb.logHeight'
+const LOG_WIDTH_KEY = 'wb.logWidth'
 const SHELL_KIND_KEY = 'wb.shellKind'
 const DEFAULT_LOG_HEIGHT = 280
+const DEFAULT_LOG_WIDTH = 460
+
+const DOCK_OPTIONS: { value: LogDock; icon: string; label: string }[] = [
+  { value: 'bottom', icon: '⬓', label: '停靠在底部' },
+  { value: 'left', icon: '◧', label: '停靠在左侧分栏' },
+  { value: 'right', icon: '◨', label: '停靠在右侧分栏' },
+  { value: 'maximized', icon: '⛶', label: '最大化铺满' }
+]
 
 function clampLogHeight(h: number): number {
   const max = typeof window !== 'undefined' ? Math.max(240, Math.floor(window.innerHeight * 0.72)) : 640
   return Math.max(140, Math.min(max, Math.round(h)))
 }
 
+function clampLogWidth(w: number): number {
+  const max = typeof window !== 'undefined' ? Math.max(360, Math.floor(window.innerWidth * 0.65)) : 860
+  return Math.max(280, Math.min(max, Math.round(w)))
+}
+
 function TerminalView({
   runId,
   visible,
-  interactive
+  interactive,
+  dock
 }: {
   runId: string
   visible: boolean
   interactive?: boolean
+  dock: LogDock
 }) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -62,7 +78,7 @@ function TerminalView({
     const observer = new ResizeObserver(sendSize)
     observer.observe(ref.current)
     return () => observer.disconnect()
-  }, [runId, visible, interactive])
+  }, [runId, visible, interactive, dock])
 
   return (
     <div
@@ -97,6 +113,8 @@ export function LogPanel({ projects }: { projects: Project[] }) {
   const shells = useShells()
   const open = useUi((s) => s.logOpen)
   const setOpen = useUi((s) => s.setLogOpen)
+  const logDock = useUi((s) => s.logDock)
+  const setLogDock = useUi((s) => s.setLogDock)
   const logTab = useUi((s) => s.logTab)
   const setLogTab = useUi((s) => s.setLogTab)
   const view = useUi((s) => s.view)
@@ -109,6 +127,14 @@ export function LogPanel({ projects }: { projects: Project[] }) {
       return Number.isFinite(saved) && saved >= 140 ? clampLogHeight(saved) : DEFAULT_LOG_HEIGHT
     } catch {
       return DEFAULT_LOG_HEIGHT
+    }
+  })
+  const [width, setWidth] = useState<number>(() => {
+    try {
+      const saved = Number(localStorage.getItem(LOG_WIDTH_KEY))
+      return Number.isFinite(saved) && saved >= 280 ? clampLogWidth(saved) : DEFAULT_LOG_WIDTH
+    } catch {
+      return DEFAULT_LOG_WIDTH
     }
   })
   const [shellKind, setShellKind] = useState<ShellKind>(() => {
@@ -238,6 +264,29 @@ export function LogPanel({ projects }: { projects: Project[] }) {
 
   const startResize = (e: React.PointerEvent) => {
     e.preventDefault()
+    if (logDock === 'left' || logDock === 'right') {
+      const startX = e.clientX
+      const startW = width
+      let latest = startW
+      const onMove = (ev: PointerEvent) => {
+        const delta = logDock === 'right' ? startX - ev.clientX : ev.clientX - startX
+        latest = clampLogWidth(startW + delta)
+        setWidth(latest)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        try {
+          localStorage.setItem(LOG_WIDTH_KEY, String(latest))
+        } catch {
+          // ignore
+        }
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      return
+    }
+
     const startY = e.clientY
     const startH = height
     let latest = startH
@@ -259,10 +308,25 @@ export function LogPanel({ projects }: { projects: Project[] }) {
   }
 
   const activeUrl = currentRun ? urls[currentRun.runId] : undefined
+  const isSideDock = logDock === 'left' || logDock === 'right'
+  const panelStyle =
+    open && isSideDock ? { width: `${width}px` } : undefined
+  const bodyStyle =
+    open && hasTabs
+      ? logDock === 'bottom'
+        ? { display: 'block', height: `${height}px` }
+        : { display: 'block' }
+      : { display: 'none' }
 
   return (
-    <section className={`log-panel${open ? ' open' : ''}`}>
-      {open && hasTabs && <div className="log-resizer" title="上下拖动调整日志区高度" onPointerDown={startResize} />}
+    <section className={`log-panel dock-${logDock}${open ? ' open' : ''}`} style={panelStyle}>
+      {open && hasTabs && logDock !== 'maximized' && (
+        <div
+          className={`log-resizer resizer-${logDock}`}
+          title={isSideDock ? '左右拖动调整终端宽度' : '上下拖动调整终端高度'}
+          onPointerDown={startResize}
+        />
+      )}
       <div className="log-header">
         <button className="icon-btn" title={open ? '收起' : '展开'} onClick={() => setOpen(!open)}>
           {open ? '▾' : '▸'}
@@ -394,6 +458,19 @@ export function LogPanel({ projects }: { projects: Project[] }) {
               停止
             </button>
           )}
+          <div className="log-dock-group" title="切换终端停靠布局（底部 / 左侧 / 右侧 / 最大化）">
+            {DOCK_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`icon-btn dock-btn${logDock === opt.value ? ' on' : ''}`}
+                title={opt.label}
+                onClick={() => setLogDock(opt.value)}
+              >
+                {opt.icon}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {open && hasTabs && searchOpen && (
@@ -454,15 +531,21 @@ export function LogPanel({ projects }: { projects: Project[] }) {
       <div
         ref={bodyRef}
         className="log-body"
-        style={{ display: open && hasTabs ? 'block' : 'none', height: `${height}px` }}
+        style={bodyStyle}
       >
         {order.map((runId) => (
-          <TerminalView key={runId} runId={runId} visible={open && selected?.kind === 'run' && selected.id === runId} />
+          <TerminalView
+            key={runId}
+            runId={runId}
+            dock={logDock}
+            visible={open && selected?.kind === 'run' && selected.id === runId}
+          />
         ))}
         {shells.order.map((id) => (
           <TerminalView
             key={id}
             runId={id}
+            dock={logDock}
             interactive
             visible={open && selected?.kind === 'shell' && selected.id === id}
           />

@@ -130,6 +130,26 @@ h2 {
   height: 100%;
 }
 
+.app.dock-right.log-open {
+  grid-template-columns: 232px minmax(0, 1fr) auto;
+  grid-template-rows: 46px minmax(0, 1fr);
+}
+
+.app.dock-left.log-open {
+  grid-template-columns: 232px auto minmax(0, 1fr);
+  grid-template-rows: 46px minmax(0, 1fr);
+}
+
+.app.dock-left.log-open > .sidebar {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.app.dock-left.log-open > .main {
+  grid-column: 3;
+  grid-row: 2;
+}
+
 /* --- 顶栏 --- */
 
 .toolbar {
@@ -1058,6 +1078,37 @@ textarea.mono {
   grid-column: 1 / -1;
   border-top: 1px solid var(--border);
   background: #08090c;
+  min-width: 0;
+  min-height: 0;
+}
+
+.log-panel.dock-right.open {
+  grid-column: 3;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-top: none;
+  border-left: 1px solid var(--border);
+}
+
+.log-panel.dock-left.open {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-top: none;
+  border-right: 1px solid var(--border);
+}
+
+.log-panel.dock-maximized.open {
+  position: fixed;
+  inset: 46px 0 0 0;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
 }
 
 .log-resizer {
@@ -1070,6 +1121,26 @@ textarea.mono {
   z-index: 5;
 }
 
+.log-resizer.resizer-right {
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  right: auto;
+  width: 6px;
+  height: auto;
+  cursor: ew-resize;
+}
+
+.log-resizer.resizer-left {
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  left: auto;
+  width: 6px;
+  height: auto;
+  cursor: ew-resize;
+}
+
 .log-resizer:hover {
   background: var(--accent-soft);
 }
@@ -1077,10 +1148,31 @@ textarea.mono {
 .log-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 8px;
   background: var(--bg-chrome);
+}
+
+.log-dock-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--border);
+}
+
+.dock-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.dock-btn.on {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .log-title {
@@ -1191,6 +1283,14 @@ textarea.mono {
 .log-body {
   height: 280px;
   padding: 6px 0 6px 10px;
+  flex: 1;
+  min-height: 0;
+}
+
+.log-panel.dock-right.open .log-body,
+.log-panel.dock-left.open .log-body,
+.log-panel.dock-maximized.open .log-body {
+  height: auto;
 }
 
 .terminal {

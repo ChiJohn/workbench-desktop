@@ -11,10 +11,14 @@ export type View =
   | { kind: 'bookmarks' }
   | { kind: 'settings' }
 
+export type LogDock = 'bottom' | 'right' | 'left' | 'maximized'
+
 interface UiState {
   view: View
   search: string
   logOpen: boolean
+  /** 终端/日志面板停靠位置（类似 Chrome DevTools） */
+  logDock: LogDock
   /** 日志面板当前选中的标签 */
   logTab: { kind: 'run' | 'shell'; id: string } | null
   /** 任务页选中的单子 key */
@@ -24,6 +28,7 @@ interface UiState {
   setView(view: View): void
   setSearch(search: string): void
   setLogOpen(open: boolean): void
+  setLogDock(dock: LogDock): void
   setLogTab(tab: { kind: 'run' | 'shell'; id: string } | null): void
   setTaskKey(key: string | null): void
   setIssueId(id: string | null): void
@@ -54,6 +59,16 @@ interface UiState {
 }
 
 const COLLAPSED_STORAGE_KEY = 'wb.collapsedCards'
+const LOG_DOCK_STORAGE_KEY = 'wb.logDock'
+
+function loadLogDock(): LogDock {
+  try {
+    const raw = localStorage.getItem(LOG_DOCK_STORAGE_KEY)
+    return raw === 'right' || raw === 'left' || raw === 'maximized' ? raw : 'bottom'
+  } catch {
+    return 'bottom'
+  }
+}
 
 function loadCollapsedCards(): Record<string, boolean> {
   try {
@@ -70,12 +85,21 @@ export const useUi = create<UiState>((set) => ({
   view: { kind: 'overview' },
   search: '',
   logOpen: true,
+  logDock: loadLogDock(),
   logTab: null,
   taskKey: null,
   issueId: null,
   setView: (view) => set({ view }),
   setSearch: (search) => set({ search }),
   setLogOpen: (logOpen) => set({ logOpen }),
+  setLogDock: (logDock) => {
+    try {
+      localStorage.setItem(LOG_DOCK_STORAGE_KEY, logDock)
+    } catch {
+      // ignore
+    }
+    set({ logDock, logOpen: true })
+  },
   setLogTab: (logTab) => set({ logTab }),
   setTaskKey: (taskKey) => set({ taskKey }),
   setIssueId: (issueId) => set({ issueId }),

@@ -23,6 +23,8 @@ import { useGlobalEvents } from './useGlobalEvents'
 export function App() {
   useGlobalEvents()
   const view = useUi((s) => s.view)
+  const logOpen = useUi((s) => s.logOpen)
+  const logDock = useUi((s) => s.logDock)
   const registry = useRegistry()
   const prefs = usePrefs()
   const tapdStatus = useTapdStatus()
@@ -75,7 +77,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app dock-${logDock}${logOpen ? ' log-open' : ''}`}>
       <Toolbar projects={projects} taskCount={board.data?.items.length} reviewCount={reviewCount} />
       <ProjectList projects={projects} status={status.data} prefs={prefs.data} />
       <main className="main">{renderMain()}</main>
