@@ -2,6 +2,7 @@ import type { StatusMap } from '../../../shared/ipc'
 import type { CnbSummaryItem, Project } from '../../../shared/types'
 import { CnbBadge } from './CnbCard'
 import { healthOf, relativeTime, TYPE_LABELS } from '../format'
+import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { StatusDot } from './StatusDot'
 
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export function Overview({ projects, status, builds, loading }: Props) {
-  const setView = useUi((s) => s.setView)
+  const focusProject = useUi((s) => s.focusProject)
   const byProject = new Map(builds?.map((item) => [item.projectId, item]))
 
   return (
@@ -41,7 +42,7 @@ export function Overview({ projects, status, builds, loading }: Props) {
           {projects.map((p) => {
             const r = status?.[p.id]
             return (
-              <tr key={p.id} onClick={() => setView({ kind: 'project', id: p.id })}>
+              <tr key={p.id} onClick={() => focusProject(p.id)}>
                 <td>
                   <StatusDot health={healthOf(p, r)} />
                 </td>
@@ -61,8 +62,24 @@ export function Overview({ projects, status, builds, loading }: Props) {
                   </td>
                 ) : (
                   <>
-                    <td className="mono branch" title={r.data.branch ?? undefined}>
-                      {r.data.branch ?? '(detached)'}
+                    <td className="mono branch" title={r.data.branch ? `${r.data.branch}（点右侧图标复制）` : undefined}>
+                      <span>{r.data.branch ?? '(detached)'}</span>
+                      {r.data.branch && (
+                        <button
+                          type="button"
+                          className="icon-btn branch-copy-inline"
+                          title={`复制分支名：${r.data.branch}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void navigator.clipboard.writeText(r.data.branch!).then(
+                              () => toast.success('已复制分支名', r.data.branch!),
+                              (err) => toast.error(err, '复制失败')
+                            )
+                          }}
+                        >
+                          ⧉
+                        </button>
+                      )}
                     </td>
                     <td className={`num${r.data.changes ? ' warn-text' : ''}`}>{r.data.changes || '-'}</td>
                     <td className="num mono">

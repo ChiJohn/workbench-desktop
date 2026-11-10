@@ -27,7 +27,7 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     title: 'Workbench',
-    icon: createAppIcon(64),
+    icon: createAppIcon(256, 'bright'),
     backgroundColor: '#14161b',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

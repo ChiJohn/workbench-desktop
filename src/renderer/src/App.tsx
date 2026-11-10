@@ -1,15 +1,7 @@
-import { AgentsPage } from './components/AgentsPage'
-import { EmptyState } from './components/EmptyState'
 import { LogPanel } from './components/LogPanel'
-import { Overview } from './components/Overview'
-import { ProjectDetail } from './components/ProjectDetail'
+import { MainStage } from './components/MainStage'
 import { ProjectList } from './components/ProjectList'
 import { ProjectDialog } from './components/ProjectDialog'
-import { BookmarksPage } from './components/BookmarksPage'
-import { KnowledgePage } from './components/KnowledgePage'
-import { ReportsPage } from './components/ReportsPage'
-import { Settings } from './components/Settings'
-import { TasksPage } from './components/TasksPage'
 import { StickyNote } from './components/StickyNote'
 import { AssistantDock } from './components/AssistantDock'
 import { Toasts } from './components/Toasts'
@@ -22,7 +14,6 @@ import { useGlobalEvents } from './useGlobalEvents'
 
 export function App() {
   useGlobalEvents()
-  const view = useUi((s) => s.view)
   const logOpen = useUi((s) => s.logOpen)
   const logDock = useUi((s) => s.logDock)
   const registry = useRegistry()
@@ -37,50 +28,26 @@ export function App() {
   const multica = useMulticaOverview()
   const reviewCount = multica.data?.issues.filter((i) => i.status === 'in_review').length
 
-  const renderMain = () => {
-    if (view.kind === 'settings') {
-      return (
-        <Settings
-          prefs={prefs.data}
-          registry={registry.data}
-          registryError={registry.error}
-          tapdStatus={tapdStatus.data}
-          apifoxStatus={apifoxStatus.data}
-          cnbStatus={cnbStatus.data}
-          board={board.data}
-        />
-      )
-    }
-    if (view.kind === 'tasks') {
-      return <TasksPage status={tapdStatus.data} board={board} projects={projects} prefs={prefs.data} />
-    }
-    if (view.kind === 'agents') return <AgentsPage overview={multica} projects={projects} />
-    if (view.kind === 'reports') return <ReportsPage prefs={prefs.data} />
-    if (view.kind === 'knowledge') return <KnowledgePage projects={projects} />
-    if (view.kind === 'bookmarks') return <BookmarksPage links={prefs.data?.quickLinks} />
-    if (registry.isLoading) return <div className="page hint">读取项目列表…</div>
-    if (registry.error) return <EmptyState message={`${registry.error.message}。可以在「设置」里用「初始化 vault」建一个新库`} />
-    if (projects.length === 0) {
-      return (
-        <EmptyState
-          message="还没有项目。点「新增项目」登记本机目录，或从远程仓库克隆"
-          actionLabel="新增项目"
-          onAction={() => useUi.getState().openProjectEditor({ mode: 'add' })}
-        />
-      )
-    }
-    if (view.kind === 'project') {
-      const project = projects.find((p) => p.id === view.id)
-      if (project) return <ProjectDetail project={project} status={status.data} prefs={prefs.data} />
-    }
-    return <Overview projects={projects} status={status.data} builds={cnbStatus.data?.hasToken ? cnbSummary.data : undefined} loading={status.isFetching} />
-  }
-
   return (
     <div className={`app dock-${logDock}${logOpen ? ' log-open' : ''}`}>
       <Toolbar projects={projects} taskCount={board.data?.items.length} reviewCount={reviewCount} />
       <ProjectList projects={projects} status={status.data} prefs={prefs.data} />
-      <main className="main">{renderMain()}</main>
+      <MainStage
+        projects={projects}
+        registry={registry.data}
+        registryLoading={registry.isLoading}
+        registryFetching={registry.isFetching}
+        registryError={registry.error}
+        prefs={prefs.data}
+        status={status.data}
+        tapdStatus={tapdStatus.data}
+        apifoxStatus={apifoxStatus.data}
+        cnbStatus={cnbStatus.data}
+        board={board}
+        multica={multica}
+        builds={cnbStatus.data?.hasToken ? cnbSummary.data : undefined}
+        statusLoading={status.isFetching}
+      />
       <LogPanel projects={projects} />
       <DepositDialog projects={projects} />
       <ProjectDialog projects={projects} codeRoot={prefs.data?.codeRoot} />

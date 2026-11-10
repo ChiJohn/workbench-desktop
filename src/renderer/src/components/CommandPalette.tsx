@@ -30,8 +30,10 @@ interface Props {
 export function CommandPalette({ projects, prefs, tapdItems }: Props) {
   const open = useUi((s) => s.commandOpen)
   const setOpen = useUi((s) => s.setCommandOpen)
-  const setView = useUi((s) => s.setView)
-  const view = useUi((s) => s.view)
+  const focusProject = useUi((s) => s.focusProject)
+  const openWorkspace = useUi((s) => s.openWorkspace)
+  const showOverview = useUi((s) => s.showOverview)
+  const openSettings = useUi((s) => s.openSettings)
   const sessions = useRuns((s) => s.sessions)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -77,7 +79,7 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
         keywords: `${p.name} ${p.repoPath} ${TYPE_LABELS[p.type]} ${p.note}`.toLowerCase(),
         run: (ctrlKey) => {
           if (ctrlKey && p.available) void openWith(p.id, opener)
-          else setView({ kind: 'project', id: p.id })
+          else focusProject(p.id)
         }
       })
     }
@@ -123,13 +125,13 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
 
     // 3. 页面与动作
     const navs: { id: string; title: string; kw: string; act: () => void }[] = [
-      { id: 'nav:overview', title: '前往：总览', kw: 'overview 总览 首页', act: () => setView({ kind: 'overview' }) },
-      { id: 'nav:tasks', title: '前往：任务中心（TAPD）', kw: 'tasks tapd 任务 需求 缺陷', act: () => setView({ kind: 'tasks' }) },
-      { id: 'nav:agents', title: '前往：智能体（Multica）', kw: 'agents multica 智能体 审核', act: () => setView({ kind: 'agents' }) },
-      { id: 'nav:reports', title: '前往：汇报（日报 / 周报 / 月报）', kw: 'reports 汇报 日报 周报 月报', act: () => setView({ kind: 'reports' }) },
-      { id: 'nav:knowledge', title: '前往：知识与收件箱', kw: 'knowledge 知识 问答 搜索 收件 图谱', act: () => setView({ kind: 'knowledge' }) },
-      { id: 'nav:bookmarks', title: '前往：收藏书签', kw: 'bookmarks 收藏 书签 链接', act: () => setView({ kind: 'bookmarks' }) },
-      { id: 'nav:settings', title: '前往：设置', kw: 'settings 设置 配置', act: () => setView({ kind: 'settings' }) },
+      { id: 'nav:overview', title: '前往：总览', kw: 'overview 总览 首页', act: () => showOverview() },
+      { id: 'nav:tasks', title: '前往：任务中心（TAPD）', kw: 'tasks tapd 任务 需求 缺陷', act: () => openWorkspace('tasks') },
+      { id: 'nav:agents', title: '前往：智能体（Multica）', kw: 'agents multica 智能体 审核', act: () => openWorkspace('agents') },
+      { id: 'nav:reports', title: '前往：汇报（日报 / 周报 / 月报）', kw: 'reports 汇报 日报 周报 月报', act: () => openWorkspace('reports') },
+      { id: 'nav:knowledge', title: '前往：知识与收件箱', kw: 'knowledge 知识 问答 搜索 收件 图谱', act: () => openWorkspace('knowledge') },
+      { id: 'nav:bookmarks', title: '前往：收藏书签', kw: 'bookmarks 收藏 书签 链接', act: () => openWorkspace('bookmarks') },
+      { id: 'nav:settings', title: '前往：设置', kw: 'settings 设置 配置', act: () => openSettings() },
       {
         id: 'act:new-project',
         title: '动作：新增或克隆项目',
@@ -141,7 +143,7 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
         title: '动作：打开底部终端',
         kw: 'terminal shell 终端 命令行',
         act: async () => {
-          const targetProjectId = view.kind === 'project' ? view.id : null
+          const targetProjectId = useUi.getState().projectId
           try {
             const session = await unwrap(api.shell.open(targetProjectId, 120, 24))
             ensureTerminal(session.id, true)
@@ -189,13 +191,13 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
         keywords: `tapd ${KIND_LABELS[item.kind]} ${item.id} ${item.title} ${item.workspaceName} ${item.statusLabel}`.toLowerCase(),
         run: () => {
           useUi.getState().setTaskKey(item.key)
-          setView({ kind: 'tasks' })
+          openWorkspace('tasks')
         }
       })
     }
 
     return list
-  }, [projects, prefs, tapdItems, sessions, setView, view])
+  }, [projects, prefs, tapdItems, sessions, focusProject, openWorkspace, showOverview, openSettings])
 
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)

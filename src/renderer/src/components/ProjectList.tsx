@@ -18,8 +18,8 @@ interface Props {
 export function ProjectList({ projects, status, prefs }: Props) {
   const search = useUi((s) => s.search)
   const setSearch = useUi((s) => s.setSearch)
-  const view = useUi((s) => s.view)
-  const setView = useUi((s) => s.setView)
+  const projectId = useUi((s) => s.projectId)
+  const clickProject = useUi((s) => s.clickProject)
   const sessions = useRuns((s) => s.sessions)
 
   const runningProjects = useMemo(
@@ -40,7 +40,7 @@ export function ProjectList({ projects, status, prefs }: Props) {
     ].filter((g) => g.items.length > 0)
   }, [projects, prefs, search])
 
-  const selectedId = view.kind === 'project' ? view.id : null
+  const selectedId = projectId
 
   return (
     <aside className="sidebar">
@@ -64,7 +64,7 @@ export function ProjectList({ projects, status, prefs }: Props) {
                 key={p.id}
                 className={`project-item${p.id === selectedId ? ' selected' : ''}${p.available ? '' : ' muted'}`}
                 title={p.available ? p.repoPath : `${p.repoPath}（${p.unavailableReason}）`}
-                onClick={() => setView({ kind: 'project', id: p.id })}
+                onClick={() => clickProject(p.id)}
                 onDoubleClick={() => p.available && openWith(p.id, prefs?.repos[p.id]?.defaultOpener ?? 'cursor')}
               >
                 <span className="project-name">{p.name}</span>

@@ -210,7 +210,8 @@ export async function refreshStatus(qc: QueryClient, id: string): Promise<void> 
 
 type GitAction =
   | { kind: 'pull' | 'fetch' | 'push'; id: string }
-  | { kind: 'checkout' | 'createBranch'; id: string; branch: string }
+  | { kind: 'checkout'; id: string; branch: string }
+  | { kind: 'createBranch'; id: string; branch: string; startPoint: string }
 
 const ACTION_LABELS: Record<GitAction['kind'], string> = {
   pull: 'pull',
@@ -234,7 +235,7 @@ export function useGitAction() {
         case 'checkout':
           return unwrap(api.git.checkout(a.id, a.branch))
         case 'createBranch':
-          return unwrap(api.git.createBranch(a.id, a.branch))
+          return unwrap(api.git.createBranch(a.id, a.branch, a.startPoint))
       }
     },
     onSuccess: (_data, a) => toast.success(`${ACTION_LABELS[a.kind]}完成`),

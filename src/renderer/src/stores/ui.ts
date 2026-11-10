@@ -1,20 +1,27 @@
 import { create } from 'zustand'
 import type { ReportKind } from '../../../shared/types'
-
-export type View =
-  | { kind: 'overview' }
-  | { kind: 'project'; id: string }
-  | { kind: 'tasks' }
-  | { kind: 'agents' }
-  | { kind: 'reports' }
-  | { kind: 'knowledge' }
-  | { kind: 'bookmarks' }
-  | { kind: 'settings' }
+import {
+  clearProject,
+  clickProject,
+  closeSettings,
+  closeWorkspace,
+  escapeWorkspace,
+  focusProject,
+  openSettings,
+  openWorkspace,
+  showOverview,
+  toggleSettings,
+  toggleWorkspace,
+  type WorkspaceId,
+  type WorkspaceNav
+} from '../../../shared/workspaceNav'
 
 export type LogDock = 'bottom' | 'right' | 'left' | 'maximized'
 
 interface UiState {
-  view: View
+  projectId: string | null
+  workspace: WorkspaceId | null
+  settingsOpen: boolean
   search: string
   logOpen: boolean
   /** 终端/日志面板停靠位置（类似 Chrome DevTools） */
@@ -27,14 +34,24 @@ interface UiState {
   taskKey: string | null
   /** 智能体页选中的 multica issue id */
   issueId: string | null
-  setView(view: View): void
+  openWorkspace(id: WorkspaceId): void
+  toggleWorkspace(id: WorkspaceId): void
+  closeWorkspace(): void
+  focusProject(id: string): void
+  clickProject(id: string): void
+  showOverview(): void
+  clearProject(): void
+  openSettings(): void
+  closeSettings(): void
+  toggleSettings(): void
+  escapeWorkspace(): void
   setSearch(search: string): void
   setLogOpen(open: boolean): void
   setLogDock(dock: LogDock): void
   setLogTab(tab: { kind: 'run' | 'shell'; id: string } | null): void
   setTaskKey(key: string | null): void
   setIssueId(id: string | null): void
-  /** 跳到智能体页并选中 issue */
+  /** 打开智能体工作区并选中 issue，当前项目保持不动 */
   openIssue(id: string): void
   /** 任务完成后待沉淀的任务卡 */
   deposit: { task: string; title: string; project: string } | null
@@ -83,8 +100,14 @@ function loadCollapsedCards(): Record<string, boolean> {
   }
 }
 
+function navOf(state: WorkspaceNav): WorkspaceNav {
+  return { projectId: state.projectId, workspace: state.workspace, settingsOpen: state.settingsOpen }
+}
+
 export const useUi = create<UiState>((set) => ({
-  view: { kind: 'overview' },
+  projectId: null,
+  workspace: null,
+  settingsOpen: false,
   search: '',
   logOpen: true,
   logDock: loadLogDock(),
@@ -92,7 +115,17 @@ export const useUi = create<UiState>((set) => ({
   logTab: null,
   taskKey: null,
   issueId: null,
-  setView: (view) => set({ view }),
+  openWorkspace: (id) => set((state) => openWorkspace(navOf(state), id)),
+  toggleWorkspace: (id) => set((state) => toggleWorkspace(navOf(state), id)),
+  closeWorkspace: () => set((state) => closeWorkspace(navOf(state))),
+  focusProject: (id) => set((state) => focusProject(navOf(state), id)),
+  clickProject: (id) => set((state) => clickProject(navOf(state), id)),
+  showOverview: () => set((state) => showOverview(navOf(state))),
+  clearProject: () => set((state) => clearProject(navOf(state))),
+  openSettings: () => set((state) => openSettings(navOf(state))),
+  closeSettings: () => set((state) => closeSettings(navOf(state))),
+  toggleSettings: () => set((state) => toggleSettings(navOf(state))),
+  escapeWorkspace: () => set((state) => escapeWorkspace(navOf(state))),
   setSearch: (search) => set({ search }),
   setLogOpen: (logOpen) =>
     set((state) => ({
@@ -117,7 +150,7 @@ export const useUi = create<UiState>((set) => ({
   setLogTab: (logTab) => set({ logTab }),
   setTaskKey: (taskKey) => set({ taskKey }),
   setIssueId: (issueId) => set({ issueId }),
-  openIssue: (issueId) => set({ view: { kind: 'agents' }, issueId }),
+  openIssue: (issueId) => set((state) => ({ ...openWorkspace(navOf(state), 'agents'), issueId })),
   deposit: null,
   offerDeposit: (deposit) => set({ deposit }),
   clearDeposit: () => set({ deposit: null }),

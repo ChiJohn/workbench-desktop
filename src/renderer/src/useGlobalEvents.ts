@@ -96,14 +96,14 @@ export function useGlobalEvents(): void {
       api.on.shellExit((event) => useShells.getState().markExited(event.id, event.exitCode)),
       api.on.tapdUpdated((board) => qc.setQueryData(qk.tapdBoard, board)),
       api.on.tapdFocus((key) => {
-        useUi.getState().setView({ kind: 'tasks' })
+        useUi.getState().openWorkspace('tasks')
         useUi.getState().setTaskKey(key)
       }),
       api.on.reportProgress((text) => useReport.getState().setProgress(text)),
       api.on.knowledgeProgress((text) => useKnowledge.getState().setProgress(text)),
       api.on.reportOpen((kind) => {
         useReport.getState().open(kind)
-        useUi.getState().setView({ kind: 'reports' })
+        useUi.getState().openWorkspace('reports')
       }),
       api.on.releaseChanged((job) => {
         const prev = useReleases.getState().upsert(job)

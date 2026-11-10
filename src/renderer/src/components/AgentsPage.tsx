@@ -54,7 +54,7 @@ export function IssueRow({ issue, selected, onClick }: { issue: MulticaIssue; se
 }
 
 export function MulticaError({ error }: { error: Error }) {
-  const setView = useUi((s) => s.setView)
+  const openSettings = useUi((s) => s.openSettings)
   const code = error instanceof ApiError ? error.code : ''
   return (
     <div className="card">
@@ -65,7 +65,7 @@ export function MulticaError({ error }: { error: Error }) {
         <button className="btn" onClick={launchMultica}>
           启动 Multica
         </button>
-        <button className="btn btn-ghost" onClick={() => setView({ kind: 'settings' })}>
+        <button className="btn btn-ghost" onClick={() => openSettings()}>
           去设置
         </button>
       </div>
@@ -76,9 +76,11 @@ export function MulticaError({ error }: { error: Error }) {
 interface Props {
   overview: UseQueryResult<MulticaOverview>
   projects: Project[]
+  /** 窄栏或盖层时，选中的 issue 独占工作区 */
+  compact?: boolean
 }
 
-export function AgentsPage({ overview, projects }: Props) {
+export function AgentsPage({ overview, projects, compact = false }: Props) {
   const qc = useQueryClient()
   const issueId = useUi((s) => s.issueId)
   const setIssueId = useUi((s) => s.setIssueId)
@@ -185,8 +187,8 @@ export function AgentsPage({ overview, projects }: Props) {
       {overview.isError && !data && <MulticaError error={overview.error} />}
 
       {data && (
-        <div className={`tasks-layout${issueId ? ' with-detail' : ''}`}>
-          <div className="issue-board">
+        <div className={`tasks-layout${issueId && !compact ? ' with-detail' : ''}`}>
+          {!(compact && issueId) && <div className="issue-board">
             {COLUMNS.map((col) => {
               const list = issues.filter((i) => col.statuses.includes(i.status))
               return (
@@ -201,7 +203,7 @@ export function AgentsPage({ overview, projects }: Props) {
                 </section>
               )
             })}
-          </div>
+          </div>}
           {issueId && <IssuePanel key={issueId} issueId={issueId} projects={projects} onClose={() => setIssueId(null)} />}
         </div>
       )}

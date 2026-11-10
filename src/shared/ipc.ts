@@ -214,7 +214,7 @@ export interface WorkbenchApi {
     push(projectId: string): Promise<Result<null>>
     branches(projectId: string): Promise<Result<BranchList>>
     checkout(projectId: string, branch: string): Promise<Result<null>>
-    createBranch(projectId: string, branch: string): Promise<Result<null>>
+    createBranch(projectId: string, branch: string, startPoint: string): Promise<Result<null>>
     changes(projectId: string): Promise<Result<WorktreeChange[]>>
     diff(projectId: string, path: string): Promise<Result<string>>
     commit(projectId: string, files: string[], message: string): Promise<Result<string>>
@@ -271,7 +271,7 @@ export interface WorkbenchApi {
     /** force 时清空元数据缓存 */
     board(force?: boolean): Promise<Result<TapdBoard>>
     detail(key: string): Promise<Result<TapdDetail>>
-    transition(key: string, to: string): Promise<Result<null>>
+    transition(key: string, to: string, comment?: string): Promise<Result<null>>
     /** 返回任务卡的 vault 相对路径 */
     createCard(key: string, projectId: string): Promise<Result<string>>
     openCard(relPath: string): Promise<Result<null>>

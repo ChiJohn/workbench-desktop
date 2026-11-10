@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AssistantClientAction, AssistantContext, AssistantMessage, AssistantMode, AssistantPending, AssistantTurn, ReportWriter } from '../../../shared/types'
+import { assistantView } from '../../../shared/workspaceNav'
 import { api, unwrap } from '../api'
 import { usePrefs, useRegistry, useSavePrefs } from '../queries'
 import { useReport } from '../stores/report'
@@ -16,14 +17,14 @@ const MODES: { value: AssistantMode; label: string }[] = [
 function applyAction(action: AssistantClientAction | null): void {
   if (!action) return
   if (action.type === 'dispatch') {
-    useUi.getState().setView({ kind: 'tasks' })
+    useUi.getState().openWorkspace('tasks')
     useUi.getState().setTaskKey(action.tapdKey)
     useUi.getState().setDispatchDraft({ tapdKey: action.tapdKey, title: action.title })
     return
   }
   if (action.type === 'report') {
     useReport.getState().open(action.kind)
-    useUi.getState().setView({ kind: 'reports' })
+    useUi.getState().openWorkspace('reports')
     useUi.getState().setReportDraft({ kind: action.kind, notes: action.notes })
     return
   }
@@ -34,7 +35,9 @@ export function AssistantDock() {
   const prefs = usePrefs()
   const registry = useRegistry()
   const save = useSavePrefs()
-  const view = useUi((s) => s.view)
+  const projectId = useUi((s) => s.projectId)
+  const workspace = useUi((s) => s.workspace)
+  const settingsOpen = useUi((s) => s.settingsOpen)
   const taskKey = useUi((s) => s.taskKey)
   const issueId = useUi((s) => s.issueId)
   const [open, setOpen] = useState(false)
@@ -55,9 +58,9 @@ export function AssistantDock() {
   }, [messages, pending, progress, open])
 
   const context = (): AssistantContext => {
-    const project = view.kind === 'project' ? registry.data?.projects.find((item) => item.id === view.id) : undefined
+    const project = projectId ? registry.data?.projects.find((item) => item.id === projectId) : undefined
     return {
-      view: view.kind,
+      view: assistantView({ projectId, workspace, settingsOpen }),
       projectId: project?.id ?? null,
       projectName: project?.name ?? null,
       taskKey,

@@ -4,7 +4,7 @@ import type { StatusMap } from '../../../shared/ipc'
 import type { OpenerKind, Prefs, Project } from '../../../shared/types'
 import { api, unwrap } from '../api'
 import { relativeTime, TYPE_LABELS } from '../format'
-import { openWith, qk, useGitAction, useSavePrefs } from '../queries'
+import { openWith, qk, useBranches, useGitAction, useSavePrefs } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { BranchSwitcher } from './BranchSwitcher'
@@ -46,19 +46,37 @@ export function ProjectDetail({ project, status, prefs }: Props) {
   const action = useGitAction()
   const savePrefs = useSavePrefs()
   const qc = useQueryClient()
-  const setView = useUi((s) => s.setView)
+  const clearProject = useUi((s) => s.clearProject)
   const openEditor = useUi((s) => s.openProjectEditor)
   const [newBranch, setNewBranch] = useState<string | null>(null)
+  const [baseBranch, setBaseBranch] = useState('')
+  const creating = newBranch !== null
+  const branches = useBranches(project.id, creating)
   const repoPrefs = prefs?.repos[project.id] ?? {}
   const r = status?.[project.id]
   const openers: OpenerKind[] =
     project.type === 'miniapp' ? ['cursor', 'terminal', 'explorer', 'wechat'] : ['cursor', 'terminal', 'explorer']
 
+  const openCreateBranch = () => {
+    setBaseBranch('')
+    setNewBranch('')
+  }
+
+  const cancelCreateBranch = () => {
+    setNewBranch(null)
+    setBaseBranch('')
+  }
+
   const submitBranch = (e: FormEvent) => {
     e.preventDefault()
-    if (!newBranch?.trim()) return
-    action.mutate({ kind: 'createBranch', id: project.id, branch: newBranch.trim() })
-    setNewBranch(null)
+    if (!newBranch?.trim() || !baseBranch.trim()) return
+    action.mutate({
+      kind: 'createBranch',
+      id: project.id,
+      branch: newBranch.trim(),
+      startPoint: baseBranch.trim()
+    })
+    cancelCreateBranch()
   }
 
   return (
@@ -85,7 +103,7 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               void unwrap(api.project.remove(project.id))
                 .then(async () => {
                   await qc.invalidateQueries({ queryKey: qk.registry })
-                  setView({ kind: 'overview' })
+                  clearProject()
                   toast.success('已移除')
                 })
                 .catch((e) => toast.error(e, '移除失败'))
@@ -200,24 +218,40 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               >
                 fetch
               </button>
-              {newBranch === null ? (
-                <button className="btn" disabled={action.isPending} onClick={() => setNewBranch('')}>
+              {!creating ? (
+                <button className="btn" disabled={action.isPending} onClick={openCreateBranch}>
                   新建分支
                 </button>
               ) : (
                 <form className="inline-form" onSubmit={submitBranch}>
+                  <select
+                    className="mono"
+                    value={baseBranch}
+                    onChange={(e) => setBaseBranch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Escape' && cancelCreateBranch()}
+                    aria-label="基分支"
+                  >
+                    <option value="" disabled>
+                      {branches.isLoading ? '加载分支…' : '选择基分支'}
+                    </option>
+                    {(branches.data?.local ?? []).map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     autoFocus
                     className="mono"
                     placeholder="feature/xxx"
                     value={newBranch}
                     onChange={(e) => setNewBranch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Escape' && setNewBranch(null)}
+                    onKeyDown={(e) => e.key === 'Escape' && cancelCreateBranch()}
                   />
-                  <button className="btn btn-primary" type="submit">
+                  <button className="btn btn-primary" type="submit" disabled={!baseBranch.trim() || !newBranch.trim()}>
                     创建并切换
                   </button>
-                  <button className="btn btn-ghost" type="button" onClick={() => setNewBranch(null)}>
+                  <button className="btn btn-ghost" type="button" onClick={cancelCreateBranch}>
                     取消
                   </button>
                 </form>

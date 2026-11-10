@@ -18,7 +18,7 @@ interface Props {
 export function IssuePanel({ issueId, projects, onClose }: Props) {
   const qc = useQueryClient()
   const detail = useMulticaIssue(issueId)
-  const setView = useUi((s) => s.setView)
+  const focusProject = useUi((s) => s.focusProject)
   const [busy, setBusy] = useState(false)
   const [descOpen, setDescOpen] = useState(false)
 
@@ -92,7 +92,7 @@ export function IssuePanel({ issueId, projects, onClose }: Props) {
         <button className="btn" onClick={() => api.app.openExternal(issue.url)}>
           在 multica 打开
         </button>
-        <button className="btn" disabled={!repo} onClick={() => repo && setView({ kind: 'project', id: repo.id })}>
+        <button className="btn" disabled={!repo} onClick={() => repo && focusProject(repo.id)}>
           去仓库
         </button>
         {card ? (

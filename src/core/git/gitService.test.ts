@@ -59,17 +59,33 @@ describe('GitService', () => {
     const repo = join(root, 'repo')
     initRepo(repo)
     commit(repo, 'a.txt', 'init')
-    await git.createBranch(repo, 'feature/x')
+    await git.createBranch(repo, 'feature/x', 'main')
     expect(await git.branches(repo)).toEqual({ current: 'feature/x', local: ['feature/x', 'main'] })
     await git.checkout(repo, 'main')
     expect((await git.status(repo)).branch).toBe('main')
+  })
+
+  it('creates a branch from a specified local start point', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'on main')
+    await git.createBranch(repo, 'base', 'main')
+    commit(repo, 'b.txt', 'on base')
+    await git.checkout(repo, 'main')
+    await git.createBranch(repo, 'feature/from-base', 'base')
+    expect((await git.status(repo)).branch).toBe('feature/from-base')
+    const tip = sh(repo, 'rev-parse', 'feature/from-base').trim()
+    const baseTip = sh(repo, 'rev-parse', 'base').trim()
+    const mainTip = sh(repo, 'rev-parse', 'main').trim()
+    expect(tip).toBe(baseTip)
+    expect(tip).not.toBe(mainTip)
   })
 
   it('refuses to switch branches with uncommitted tracked changes', async () => {
     const repo = join(root, 'repo')
     initRepo(repo)
     commit(repo, 'a.txt', 'init')
-    await git.createBranch(repo, 'other')
+    await git.createBranch(repo, 'other', 'main')
     await git.checkout(repo, 'main')
     writeFileSync(join(repo, 'a.txt'), 'dirty')
     await expect(git.checkout(repo, 'other')).rejects.toMatchObject({ code: 'DIRTY_WORKTREE' })
@@ -80,7 +96,7 @@ describe('GitService', () => {
     const repo = join(root, 'repo')
     initRepo(repo)
     commit(repo, 'a.txt', 'init')
-    await git.createBranch(repo, 'other')
+    await git.createBranch(repo, 'other', 'main')
     writeFileSync(join(repo, 'new.txt'), 'untracked')
     await git.checkout(repo, 'main')
     expect((await git.status(repo)).branch).toBe('main')
@@ -89,8 +105,16 @@ describe('GitService', () => {
   it('rejects branch names that look like options', async () => {
     const repo = join(root, 'repo')
     initRepo(repo)
-    await expect(git.createBranch(repo, '-D')).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
+    await expect(git.createBranch(repo, '-D', 'main')).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
+    await expect(git.createBranch(repo, 'ok', '-D')).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
     await expect(git.checkout(repo, '  ')).rejects.toMatchObject({ code: 'INVALID_BRANCH' })
+  })
+
+  it('fails when start point does not exist', async () => {
+    const repo = join(root, 'repo')
+    initRepo(repo)
+    commit(repo, 'a.txt', 'init')
+    await expect(git.createBranch(repo, 'feature/x', 'missing')).rejects.toMatchObject({ code: 'GIT_FAILED' })
   })
 
   it('surfaces git errors as GIT_FAILED with stderr detail', async () => {

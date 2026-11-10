@@ -19,7 +19,7 @@ function joinWin(root: string, name: string): string {
 export function ProjectDialog({ projects, codeRoot }: { projects: Project[]; codeRoot?: string }) {
   const editor = useUi((s) => s.projectEditor)
   const closeEditor = useUi((s) => s.closeProjectEditor)
-  const setView = useUi((s) => s.setView)
+  const focusProject = useUi((s) => s.focusProject)
   const qc = useQueryClient()
   const project = editor?.mode === 'edit' ? projects.find((p) => p.id === editor.id) : undefined
   const key = !editor ? '' : editor.mode === 'add' ? 'add' : editor.id
@@ -156,7 +156,7 @@ export function ProjectDialog({ projects, codeRoot }: { projects: Project[]; cod
     try {
       const saved = editor.mode === 'edit' ? await unwrap(api.project.update(editor.id, req)) : await unwrap(api.project.add(req))
       await qc.invalidateQueries({ queryKey: qk.registry })
-      setView({ kind: 'project', id: saved.id })
+      focusProject(saved.id)
       closeEditor()
       toast.success(saved.available ? (editor.mode === 'edit' ? '已更新项目' : '已添加项目') : `已保存，但${saved.unavailableReason}`)
     } catch (e) {

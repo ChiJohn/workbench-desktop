@@ -134,9 +134,10 @@ export class GitService {
     await this.run(repoPath, ['switch', branch.trim()], SWITCH_TIMEOUT)
   }
 
-  async createBranch(repoPath: string, branch: string): Promise<void> {
+  async createBranch(repoPath: string, branch: string, startPoint: string): Promise<void> {
     assertBranchName(branch)
-    await this.run(repoPath, ['switch', '-c', branch.trim()], SWITCH_TIMEOUT)
+    assertBranchName(startPoint)
+    await this.run(repoPath, ['switch', '-c', branch.trim(), startPoint.trim()], SWITCH_TIMEOUT)
   }
 
   /** 工作区改动（含未跟踪文件，逐个列出），路径为仓库内 / 分隔的相对路径 */

@@ -59,14 +59,16 @@ interface Props {
   board: UseQueryResult<TapdBoard>
   projects: Project[]
   prefs?: Prefs
+  /** 窄栏或盖层时，选中的单子独占工作区 */
+  compact?: boolean
 }
 
-export function TasksPage({ status, board, projects, prefs }: Props) {
+export function TasksPage({ status, board, projects, prefs, compact = false }: Props) {
   const qc = useQueryClient()
   const savePrefs = useSavePrefs()
   const taskKey = useUi((s) => s.taskKey)
   const setTaskKey = useUi((s) => s.setTaskKey)
-  const setView = useUi((s) => s.setView)
+  const openSettings = useUi((s) => s.openSettings)
   const [workspace, setWorkspace] = useState('all')
   const [kinds, setKinds] = useState<Set<TapdKind>>(new Set(KINDS))
   const [statusLabel, setStatusLabel] = useState('all')
@@ -94,7 +96,7 @@ export function TasksPage({ status, board, projects, prefs }: Props) {
       <div className="page empty">
         <h1>任务</h1>
         <p className="hint">还没有配置 TAPD 令牌。</p>
-        <button className="btn btn-primary" onClick={() => setView({ kind: 'settings' })}>
+        <button className="btn btn-primary" onClick={() => openSettings()}>
           去设置
         </button>
       </div>
@@ -166,8 +168,8 @@ export function TasksPage({ status, board, projects, prefs }: Props) {
         </div>
       ))}
 
-      <div className={`tasks-layout${taskKey ? ' with-detail' : ''}`}>
-        <div className="task-groups">
+      <div className={`tasks-layout${taskKey && !compact ? ' with-detail' : ''}`}>
+        {!(compact && taskKey) && <div className="task-groups">
           {board.isPending && <p className="hint">从 TAPD 拉取中…</p>}
           {board.isError && (
             <p className="error-text">
@@ -221,7 +223,7 @@ export function TasksPage({ status, board, projects, prefs }: Props) {
               </section>
             )
           })}
-        </div>
+        </div>}
         {taskKey && (
           <TaskDetail
             key={taskKey}

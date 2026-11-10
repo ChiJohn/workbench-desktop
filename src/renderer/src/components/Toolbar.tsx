@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import type { Project } from '../../../shared/types'
 import { moveToolbarItem, normalizeToolbarOrder, type ToolbarId } from '../../../shared/toolbarOrder'
+import { toolbarActive, type WorkspaceId } from '../../../shared/workspaceNav'
 import { qk, useFetchAll } from '../queries'
 import { useUi } from '../stores/ui'
 
@@ -24,8 +25,12 @@ function loadOrder(): ToolbarId[] {
 
 export function Toolbar({ projects, taskCount, reviewCount }: Props) {
   const qc = useQueryClient()
-  const view = useUi((s) => s.view)
-  const setView = useUi((s) => s.setView)
+  const projectId = useUi((s) => s.projectId)
+  const workspace = useUi((s) => s.workspace)
+  const settingsOpen = useUi((s) => s.settingsOpen)
+  const toggleWorkspace = useUi((s) => s.toggleWorkspace)
+  const showOverview = useUi((s) => s.showOverview)
+  const toggleSettings = useUi((s) => s.toggleSettings)
   const fetchAll = useFetchAll(projects)
   const [order, setOrder] = useState<ToolbarId[]>(loadOrder)
   const [dragging, setDragging] = useState<ToolbarId | null>(null)
@@ -68,7 +73,9 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
     if (next !== order) save(next)
   }
 
-  const navClass = (kind: string) => (view.kind === kind ? 'btn btn-ghost active' : 'btn btn-ghost')
+  const nav = { projectId, workspace, settingsOpen }
+  const navClass = (id: 'overview' | 'settings' | WorkspaceId) =>
+    toolbarActive(nav, id) ? 'btn btn-ghost active' : 'btn btn-ghost'
 
   const button = (id: ToolbarId) => {
     const drag = {
@@ -79,10 +86,10 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
       onDragOver: onDragOver(id),
       onDragEnd: onDragEnd
     }
-    if (id === 'overview') return <button key={id} {...drag} className={`${navClass('overview')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'overview' }))}>总览</button>
+    if (id === 'overview') return <button key={id} {...drag} className={`${navClass('overview')}${dragging === id ? ' dragging' : ''}`} onClick={click(showOverview)}>总览</button>
     if (id === 'tasks') {
       return (
-        <button key={id} {...drag} className={`${navClass('tasks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'tasks' }))}>
+        <button key={id} {...drag} className={`${navClass('tasks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('tasks'))}>
           任务
           {taskCount !== undefined && taskCount > 0 && <span className="count-badge">{taskCount}</span>}
         </button>
@@ -90,7 +97,7 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
     }
     if (id === 'agents') {
       return (
-        <button key={id} {...drag} className={`${navClass('agents')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'agents' }))}>
+        <button key={id} {...drag} className={`${navClass('agents')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('agents'))}>
           智能体
           {reviewCount !== undefined && reviewCount > 0 && (
             <span className="count-badge" title="审核中">
@@ -100,9 +107,9 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
         </button>
       )
     }
-    if (id === 'reports') return <button key={id} {...drag} className={`${navClass('reports')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'reports' }))}>汇报</button>
-    if (id === 'knowledge') return <button key={id} {...drag} className={`${navClass('knowledge')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'knowledge' }))}>知识</button>
-    if (id === 'bookmarks') return <button key={id} {...drag} className={`${navClass('bookmarks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'bookmarks' }))}>收藏</button>
+    if (id === 'reports') return <button key={id} {...drag} className={`${navClass('reports')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('reports'))}>汇报</button>
+    if (id === 'knowledge') return <button key={id} {...drag} className={`${navClass('knowledge')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('knowledge'))}>知识</button>
+    if (id === 'bookmarks') return <button key={id} {...drag} className={`${navClass('bookmarks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('bookmarks'))}>收藏</button>
     if (id === 'fetch') {
       return (
         <button key={id} {...drag} className={`btn${dragging === id ? ' dragging' : ''}`} disabled={fetchAll.isPending} onClick={click(() => fetchAll.mutate())}>
@@ -112,7 +119,7 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
     }
     if (id === 'refresh') return <button key={id} {...drag} className={`btn${dragging === id ? ' dragging' : ''}`} onClick={click(refresh)}>刷新</button>
     return (
-      <button key={id} {...drag} className={`${navClass('settings')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => setView({ kind: 'settings' }))}>
+      <button key={id} {...drag} className={`${navClass('settings')}${dragging === id ? ' dragging' : ''}`} onClick={click(toggleSettings)}>
         设置
       </button>
     )
@@ -121,7 +128,14 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
   return (
     <header className="toolbar">
       <div className="brand">
-        <span className="brand-mark">&gt;_</span>
+        <span className="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="12" height="12">
+            <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="0.7" />
+            <rect x="9" y="2.5" width="4.5" height="4.5" rx="0.7" />
+            <rect x="2.5" y="9" width="4.5" height="4.5" rx="0.7" />
+            <rect x="9" y="9" width="4.5" height="4.5" rx="0.7" />
+          </svg>
+        </span>
         Workbench
       </div>
       <nav className="toolbar-actions">

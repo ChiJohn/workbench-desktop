@@ -1,0 +1,6 @@
+# DSH Workbench Extension Patch Overlay
+- insert:
+    - id: workbench
+      name: './src/index.ts'
+      config:
+        baseUrl: 'https://api.tapd.cn'

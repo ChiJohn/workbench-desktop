@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasOwner, htmlToText, itemUrl, normalizeBug, normalizeStory, normalizeTask, splitOwners } from './normalize'
+import { hasOwner, htmlToText, itemUrl, normalizeBug, normalizeStory, normalizeTask, splitOwners, tapdShortId } from './normalize'
 
 describe('owners', () => {
   it('splits semicolon lists', () => {
@@ -35,6 +35,18 @@ describe('htmlToText', () => {
 
   it('handles empty input', () => {
     expect(htmlToText(null)).toBe('')
+  })
+})
+
+describe('tapdShortId', () => {
+  it('reads the short id out of a long TAPD id', () => {
+    expect(tapdShortId('1135364280001016729', '35364280')).toBe('1016729')
+    expect(tapdShortId('1135364280001015493', '35364280')).toBe('1015493')
+  })
+
+  it('keeps an id that is already short', () => {
+    expect(tapdShortId('9', '35364280')).toBe('9')
+    expect(tapdShortId('1016729', '35364280')).toBe('1016729')
   })
 })
 

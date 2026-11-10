@@ -9,7 +9,7 @@ const STATUS_ORDER = ['in_review', 'in_progress', 'blocked', 'todo', 'backlog']
 export function RepoAgentCard({ project }: { project: Project }) {
   const overview = useMulticaOverview()
   const openIssue = useUi((s) => s.openIssue)
-  const setView = useUi((s) => s.setView)
+  const openSettings = useUi((s) => s.openSettings)
 
   const linked = overview.data ? overview.data.projects.filter((p) => p.repoId === project.id) : []
   const linkedIds = new Set(linked.map((p) => p.id))
@@ -26,7 +26,7 @@ export function RepoAgentCard({ project }: { project: Project }) {
       return (
         <p className="hint">
           没有对应的 multica 项目。
-          <button className="btn btn-small" onClick={() => setView({ kind: 'settings' })}>
+          <button className="btn btn-small" onClick={() => openSettings()}>
             去设置映射
           </button>
         </p>

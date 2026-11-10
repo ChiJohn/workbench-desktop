@@ -24,6 +24,13 @@ export function hasOwner(value: string | null | undefined, nick: string): boolea
   return splitOwners(value).includes(nick)
 }
 
+/** 网页上的短号。长 ID 是 `11` + 项目 ID + 9 位补零短号，例如 1016729 */
+export function tapdShortId(id: string, workspaceId: string): string {
+  const prefix = `11${workspaceId}`
+  if (!id.startsWith(prefix) || id.length <= prefix.length) return id
+  return id.slice(prefix.length).replace(/^0+/, '') || '0'
+}
+
 export function itemUrl(kind: TapdKind, workspaceId: string, id: string): string {
   const path = kind === 'bug' ? 'bugtrace/bugs' : kind === 'story' ? 'prong/stories' : 'prong/tasks'
   return `${TAPD_WEB}/${workspaceId}/${path}/view/${id}`

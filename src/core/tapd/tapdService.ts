@@ -18,6 +18,13 @@ const WORKSPACE_CONCURRENCY = 3
 const ITERATION_CHUNK = 30
 const EXCLUDED_WORKSPACE_NAMES = new Set(['示例空间'])
 
+const COMMENT_TYPE: Record<TapdKind, string> = { story: 'stories', bug: 'bug_remark', task: 'tasks' }
+
+function commentHtml(text: string): string {
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return `<p>${escaped.replace(/\r?\n/g, '<br>')}</p>`
+}
+
 const ENTITY: Record<TapdKind, { path: string; entity: string; ownerParam: string; ownerField: string; creatorField: string; fields: string }> = {
   story: {
     path: '/stories',
@@ -156,7 +163,7 @@ export class TapdService {
     return { item, description, transitions }
   }
 
-  async transition(key: string, to: string): Promise<void> {
+  async transition(key: string, to: string, comment?: string): Promise<void> {
     const item = this.item(key)
     const target = (await this.allowedTransitions(item)).find((t) => t.to === to)
     if (!target || target.blockedBy.length) {
@@ -164,11 +171,12 @@ export class TapdService {
       throw new AppError('TAPD_TRANSITION_NOT_ALLOWED', reason, `${key} → ${to}`)
     }
     const entity = ENTITY[item.kind]
+    const author = await this.currentUser()
     const body: Record<string, string> = {
       workspace_id: item.workspaceId,
       id: item.id,
       status: to,
-      current_user: await this.currentUser()
+      current_user: author
     }
     let owners = item.owners
     if (target.label === '已解决') {
@@ -179,6 +187,20 @@ export class TapdService {
     }
     await this.client.post(entity.path, body)
     this.items.set(key, { ...item, status: to, statusLabel: target.label, owners })
+    const remark = comment?.trim()
+    if (!remark) return
+    try {
+      await this.client.post('/comments', {
+        workspace_id: item.workspaceId,
+        entry_type: COMMENT_TYPE[item.kind],
+        entry_id: item.id,
+        author,
+        description: commentHtml(remark)
+      })
+    } catch (e) {
+      const info = toErrorInfo(e)
+      throw new AppError('TAPD_COMMENT_FAILED', `状态已改为「${target.label}」，备注没有写上：${info.message}`, info.detail)
+    }
   }
 
   /** 缺陷的创建人是 reporter，需求和任务是 creator */

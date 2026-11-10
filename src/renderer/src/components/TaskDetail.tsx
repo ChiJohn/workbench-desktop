@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import type { Prefs, Project, TapdBoard, TapdItem, TapdTransition } from '../../../shared/types'
-import { api, unwrap } from '../api'
+import { tapdShortId } from '../../../core/tapd/normalize'
+import type { Prefs, Project, TapdBoard, TapdItem, TapdKind, TapdTransition } from '../../../shared/types'
+import { ApiError, api, unwrap } from '../api'
 import { statusTone } from '../format'
 import { qk, refreshTapdBoard, useMulticaByTapd, useMulticaOverview, useSavePrefs, useTapdDetail } from '../queries'
 import { toast } from '../stores/toast'
@@ -16,6 +17,11 @@ interface Props {
   projects: Project[]
   prefs?: Prefs
   onClose(): void
+}
+
+function displayId(kind: TapdKind, id: string, workspaceId: string): string | null {
+  if (kind !== 'task' && kind !== 'bug') return null
+  return tapdShortId(id, workspaceId)
 }
 
 function linkedRepo(item: TapdItem, prefs?: Prefs): string | undefined {
@@ -90,9 +96,10 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
   const qc = useQueryClient()
   const detail = useTapdDetail(itemKey)
   const savePrefs = useSavePrefs()
-  const setView = useUi((s) => s.setView)
+  const focusProject = useUi((s) => s.focusProject)
   const setTaskKey = useUi((s) => s.setTaskKey)
   const [confirming, setConfirming] = useState<TapdTransition | null>(null)
+  const [remark, setRemark] = useState('')
   const [terminalDispatchOpen, setTerminalDispatchOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -116,6 +123,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
   }
 
   const { item, description, transitions, card } = detail.data
+  const shortId = displayId(item.kind, item.id, item.workspaceId)
   const repoId = linkedRepo(item, prefs)
   const repo = projects.find((p) => p.id === repoId)
 
@@ -141,21 +149,31 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
     }
   }
 
+  const finishTransition = async () => {
+    setConfirming(null)
+    setRemark('')
+    await refreshTapdBoard(qc, false)
+    const board = qc.getQueryData<TapdBoard>(qk.tapdBoard)
+    if (board?.items.some((i) => i.key === item.key)) {
+      await qc.invalidateQueries({ queryKey: qk.tapdDetail(item.key) })
+    } else {
+      setTaskKey(null)
+    }
+  }
+
   const transition = async (t: TapdTransition) => {
     setBusy(true)
     try {
-      await unwrap(api.tapd.transition(item.key, t.to))
+      await unwrap(api.tapd.transition(item.key, t.to, remark))
       toast.success(`已流转为「${t.label}」`, item.title)
-      setConfirming(null)
-      await refreshTapdBoard(qc, false)
-      const board = qc.getQueryData<TapdBoard>(qk.tapdBoard)
-      if (board?.items.some((i) => i.key === item.key)) {
-        await qc.invalidateQueries({ queryKey: qk.tapdDetail(item.key) })
-      } else {
-        setTaskKey(null)
-      }
+      await finishTransition()
     } catch (e) {
-      toast.error(e, '流转失败')
+      if (e instanceof ApiError && e.code === 'TAPD_COMMENT_FAILED') {
+        toast.error(e)
+        await finishTransition()
+      } else {
+        toast.error(e, '流转失败')
+      }
     }
     setBusy(false)
   }
@@ -167,6 +185,12 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
         <span className={`kind-badge ${item.kind}`}>{KIND_LABELS[item.kind]}</span> {item.title}
       </h2>
       <dl className="confirm-list">
+        {shortId && (
+          <>
+            <dt>ID</dt>
+            <dd className="mono">{shortId}</dd>
+          </>
+        )}
         <dt>项目</dt>
         <dd>{item.workspaceName}</dd>
         <dt>状态</dt>
@@ -203,7 +227,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
         <button className="btn" onClick={() => api.app.openExternal(item.url)}>
           在 TAPD 打开
         </button>
-        <button className="btn" disabled={!repo} title={repo ? undefined : '先关联仓库'} onClick={() => repo && setView({ kind: 'project', id: repo.id })}>
+        <button className="btn" disabled={!repo} title={repo ? undefined : '先关联仓库'} onClick={() => repo && focusProject(repo.id)}>
           去仓库
         </button>
         {card ? (
@@ -245,7 +269,10 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
               className="btn btn-small"
               disabled={busy || t.blockedBy.length > 0}
               title={t.blockedBy.length ? `需要填写：${t.blockedBy.join('、')}，请在 TAPD 中操作` : undefined}
-              onClick={() => setConfirming(t)}
+              onClick={() => {
+                setRemark('')
+                setConfirming(t)
+              }}
             >
               {t.label}
             </button>
@@ -263,7 +290,7 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
             <h2>确认流转</h2>
             <dl className="confirm-list">
               <dt>单号</dt>
-              <dd className="mono">{item.id}</dd>
+              <dd className="mono">{shortId ?? item.id}</dd>
               <dt>标题</dt>
               <dd>{item.title}</dd>
               <dt>状态</dt>
@@ -271,12 +298,23 @@ export function TaskDetail({ itemKey, projects, prefs, onClose }: Props) {
                 {item.statusLabel} → <strong>{confirming.label}</strong>
               </dd>
             </dl>
+            <label>
+              备注
+              <textarea
+                autoFocus
+                rows={3}
+                value={remark}
+                disabled={busy}
+                placeholder="可选，留空则只改状态"
+                onChange={(e) => setRemark(e.target.value)}
+              />
+            </label>
             <p className="hint">
-              会直接修改 TAPD 上的单子状态。
+              会直接修改 TAPD 上的单子状态。填写的备注会写成这条单的评论。
               {confirming.label === '已解决' ? '处理人会改为这张单的创建人。' : ''}
             </p>
             <div className="button-row">
-              <button autoFocus className="btn btn-primary" disabled={busy} onClick={() => transition(confirming)}>
+              <button className="btn btn-primary" disabled={busy} onClick={() => transition(confirming)}>
                 {busy ? '提交中…' : '确认流转'}
               </button>
               <button className="btn btn-ghost" disabled={busy} onClick={() => setConfirming(null)}>

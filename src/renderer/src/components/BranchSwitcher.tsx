@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBranches, useGitAction } from '../queries'
+import { toast } from '../stores/toast'
 
 interface Props {
   projectId: string
   projectName: string
   branch: string | null
+}
+
+async function copyBranchName(name: string | null) {
+  if (!name) return
+  try {
+    await navigator.clipboard.writeText(name)
+    toast.success('已复制分支名', name)
+  } catch (e) {
+    toast.error(e, '复制分支名失败')
+  }
 }
 
 export function BranchSwitcher({ projectId, projectName, branch }: Props) {
@@ -35,9 +46,19 @@ export function BranchSwitcher({ projectId, projectName, branch }: Props) {
 
   return (
     <div className="branch-switcher" ref={ref}>
-      <button className="btn mono" disabled={action.isPending} onClick={() => setOpen(!open)}>
+      <button className="btn mono" type="button" disabled={action.isPending} onClick={() => setOpen(!open)}>
         {action.isPending ? '切换中…' : (branch ?? '(detached)')} ▾
       </button>
+      {branch && (
+        <button
+          className="btn btn-small btn-ghost"
+          type="button"
+          title={`复制分支名：${branch}`}
+          onClick={() => void copyBranchName(branch)}
+        >
+          复制
+        </button>
+      )}
       {open && (
         <div className="dropdown">
           <input autoFocus placeholder="过滤分支" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -45,13 +66,22 @@ export function BranchSwitcher({ projectId, projectName, branch }: Props) {
             {branches.isLoading && <div className="hint">加载中…</div>}
             {branches.error && <div className="error-text">{branches.error.message}</div>}
             {list.map((name) => (
-              <button
-                key={name}
-                className={`dropdown-item mono${name === branch ? ' active' : ''}`}
-                onClick={() => choose(name)}
-              >
-                {name}
-              </button>
+              <div key={name} className={`dropdown-item-row${name === branch ? ' active' : ''}`}>
+                <button className="dropdown-item mono" type="button" onClick={() => choose(name)}>
+                  {name}
+                </button>
+                <button
+                  className="icon-btn branch-copy-btn"
+                  type="button"
+                  title={`复制 ${name}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void copyBranchName(name)
+                  }}
+                >
+                  ⧉
+                </button>
+              </div>
             ))}
             {branches.data && list.length === 0 && <div className="hint">没有匹配的分支</div>}
           </div>

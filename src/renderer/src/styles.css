@@ -181,7 +181,11 @@ h2 {
   border-radius: 6px;
   background: var(--bg-inset);
   color: var(--accent);
-  font: 700 11px var(--mono);
+}
+
+.brand-mark svg {
+  display: block;
+  fill: currentColor;
 }
 
 /* 导航和操作在同一行，拖动可换位；间隙把两组撑开 */
@@ -399,9 +403,107 @@ h2 {
 /* --- 主区 --- */
 
 .main {
-  overflow-y: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
   min-height: 0;
   background: var(--bg);
+}
+
+.main-stage {
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.project-pane,
+.workspace-pane,
+.stage-base,
+.settings-layer {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.main-stage.overlay .workspace-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.28);
+}
+
+.settings-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+
+.workspace-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-chrome);
+}
+
+.workspace-title {
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.workspace-project {
+  max-width: 46%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-project:hover {
+  color: var(--text-title);
+}
+
+.workspace-split {
+  position: relative;
+  cursor: col-resize;
+  background: var(--border-strong);
+}
+
+.workspace-split::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
+}
+
+.workspace-split:hover,
+.workspace-split.dragging {
+  background: var(--accent);
+}
+
+.project-pane .page,
+.workspace-pane .page {
+  max-width: none;
+}
+
+.workspace-pane .page {
+  padding-top: 16px;
 }
 
 .page {
@@ -799,6 +901,9 @@ h2 {
 
 .branch-switcher {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dropdown {
@@ -824,9 +929,27 @@ h2 {
   overflow-y: auto;
 }
 
+.dropdown-item-row {
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.dropdown-item-row:hover {
+  background: var(--bg-hover);
+}
+
+.dropdown-item-row.active {
+  color: var(--accent);
+}
+
 .dropdown-item {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 4px 8px;
   border: 0;
   border-radius: 4px;
@@ -835,12 +958,24 @@ h2 {
   cursor: pointer;
 }
 
-.dropdown-item:hover {
-  background: var(--bg-hover);
+.branch-copy-btn,
+.branch-copy-inline {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0.7;
 }
 
-.dropdown-item.active {
-  color: var(--accent);
+.branch-copy-btn:hover,
+.branch-copy-inline:hover {
+  opacity: 1;
+  color: var(--text-title);
+}
+
+.branch-copy-inline {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 
 .script-list {

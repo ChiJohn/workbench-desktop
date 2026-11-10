@@ -10,9 +10,11 @@ import { buildCommitPrompt, cleanCommitMessage } from '../core/git/commitPrompt'
 import { readVaultPrefsBackup, VAULT_PREFS_REL } from '../core/prefs/vaultBackup'
 import { ReportWriterRunner, resolveWriter } from '../core/report/writer'
 import { killTree } from '../core/runner/killTree'
-import { createCard, findCard, findCardBy, backfillCard } from '../core/tasks/taskCard'
+import { createCard, findCard, findCardBy, backfillCard, projectLabel } from '../core/tasks/taskCard'
 import {
   buildTerminalAiLaunchLine,
+  knowledgeDispatchQuery,
+  renderKnowledgeDispatchContext,
   upsertVaultTerminalTaskCard
 } from '../core/tasks/terminalDispatch'
 import { mapLimit } from '../core/concurrency'
@@ -159,8 +161,8 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     await git.checkout(await repoPath(id), branch)
     return null
   })
-  handle(Channels.gitCreateBranch, async (id: string, branch: string) => {
-    await git.createBranch(await repoPath(id), branch)
+  handle(Channels.gitCreateBranch, async (id: string, branch: string, startPoint: string) => {
+    await git.createBranch(await repoPath(id), branch, startPoint)
     return null
   })
 
@@ -230,8 +232,8 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     const card = await findCard(prefs.get().vaultPath, detail.item.id)
     return { ...detail, card }
   })
-  handle(Channels.tapdTransition, async (key: string, to: string) => {
-    await tapd.transition(key, to)
+  handle(Channels.tapdTransition, async (key: string, to: string, comment?: string) => {
+    await tapd.transition(key, to, comment)
     return null
   })
   handle(Channels.tapdCreateCard, async (key: string, projectId: string) => {
@@ -277,6 +279,16 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
           graphRel: uaLoc.graphRel
         })
       : null
+    let knowledgeContext: string | null = null
+    const knowledgeQuery = knowledgeDispatchQuery(title, finalDesc)
+    if (knowledgeQuery) {
+      try {
+        const hits = await knowledge.search(knowledgeQuery, projectLabel(project.obsidianLink) || project.name)
+        knowledgeContext = renderKnowledgeDispatchContext(hits)
+      } catch {
+        knowledgeContext = null
+      }
+    }
 
     const { cardRel, cardFullPath } = await upsertVaultTerminalTaskCard({
       vaultPath,
@@ -287,7 +299,8 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
       tapdItem,
       designs,
       contracts,
-      uaContext
+      uaContext,
+      knowledgeContext
     })
 
     const shellLine = buildTerminalAiLaunchLine({

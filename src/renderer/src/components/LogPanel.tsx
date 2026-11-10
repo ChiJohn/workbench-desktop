@@ -117,7 +117,7 @@ export function LogPanel({ projects }: { projects: Project[] }) {
   const setLogDock = useUi((s) => s.setLogDock)
   const logTab = useUi((s) => s.logTab)
   const setLogTab = useUi((s) => s.setLogTab)
-  const view = useUi((s) => s.view)
+  const projectId = useUi((s) => s.projectId)
   const bodyRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -149,7 +149,6 @@ export function LogPanel({ projects }: { projects: Project[] }) {
   const [searchText, setSearchText] = useState('')
   const [searchResult, setSearchResult] = useState<{ current: number; total: number }>({ current: 0, total: 0 })
 
-  const projectId = view.kind === 'project' ? view.id : null
   const nameOf = (id: string) => projects.find((p) => p.id === id)?.name ?? id
 
   const selected = (() => {

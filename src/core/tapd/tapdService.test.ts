@@ -63,6 +63,9 @@ function fakeTapd(fail: string[] = []) {
             { id: `${ws}22`, name: '已完成任务', status: 'done', owner: `${ME};`, iteration_id: 'it2', modified: '2026-10-23 12:00:00' }
           ])
         )
+      case '/comments':
+        if (params.description.includes('写失败')) return new Response(JSON.stringify({ status: 0, info: '评论失败' }))
+        return ok({ Comment: { id: 'c1' } })
       case '/workflows/all_transitions':
         if (params.system === 'bug') {
           return ok([{ StepPrevious: 'new', StepNext: 'resolved', Appendfield: [] }])
@@ -207,6 +210,41 @@ describe('TapdService.detail and transition', () => {
     await service.board()
     await expect(service.transition('bug:211', 'resolved')).rejects.toMatchObject({ code: 'TAPD_NO_CREATOR' })
     expect(tapd.calls.filter((c) => c.method === 'POST')).toHaveLength(0)
+  })
+
+  it('writes an optional remark as a TAPD comment after the status changes', async () => {
+    await service.board()
+    await service.transition('story:101', 'status_6', '已联调\n通过')
+    const posts = tapd.calls.filter((c) => c.method === 'POST')
+    expect(posts.map((c) => c.path)).toEqual(['/stories', '/comments'])
+    expect(posts[1].params).toEqual({
+      workspace_id: '1',
+      entry_type: 'stories',
+      entry_id: '101',
+      author: ME,
+      description: '<p>已联调<br>通过</p>'
+    })
+
+    await service.transition('bug:111', 'resolved', '已修复')
+    expect(tapd.calls.filter((c) => c.method === 'POST').at(-1)?.params).toMatchObject({ entry_type: 'bug_remark', entry_id: '111', description: '<p>已修复</p>' })
+
+    await service.transition('task:121', 'done', '做完了')
+    expect(tapd.calls.filter((c) => c.method === 'POST').at(-1)?.params).toMatchObject({ entry_type: 'tasks', entry_id: '121', description: '<p>做完了</p>' })
+  })
+
+  it('skips the comment when the remark is blank', async () => {
+    await service.board()
+    await service.transition('story:101', 'status_6', '  \n ')
+    expect(tapd.calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual(['/stories'])
+  })
+
+  it('keeps the new status when the remark fails to post', async () => {
+    await service.board()
+    await expect(service.transition('story:101', 'status_6', '写失败')).rejects.toMatchObject({
+      code: 'TAPD_COMMENT_FAILED',
+      message: expect.stringContaining('研发中')
+    })
+    expect(service.item('story:101').status).toBe('status_6')
   })
 
   it('requires the item to be on the board', async () => {

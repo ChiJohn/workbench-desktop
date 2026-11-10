@@ -162,12 +162,12 @@ function ApifoxSettings({ status }: { status?: TapdStatus }) {
 }
 
 function QuickLinkSettings() {
-  const setView = useUi((s) => s.setView)
+  const openWorkspace = useUi((s) => s.openWorkspace)
   return (
     <section className="card">
       <h2>收藏</h2>
       <p className="hint">工具网站在顶栏「收藏」里添加。钉住的会出现在侧栏底部。</p>
-      <button className="btn btn-small" type="button" onClick={() => setView({ kind: 'bookmarks' })}>
+      <button className="btn btn-small" type="button" onClick={() => openWorkspace('bookmarks')}>
         打开收藏
       </button>
     </section>
