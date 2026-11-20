@@ -62,6 +62,10 @@ import type {
   VaultInitResult,
   WorktreeChange,
   GitStashEntry,
+  HistoryPage,
+  HistoryQuery,
+  HistoryRefs,
+  CommitFileChange,
   TodoItem
 } from './types'
 
@@ -135,6 +139,10 @@ export const Channels = {
   gitStashPop: 'git.stashPop',
   gitStashDrop: 'git.stashDrop',
   gitRemoteWeb: 'git.remoteWeb',
+  gitHistory: 'git.history',
+  gitHistoryRefs: 'git.historyRefs',
+  gitCommitFiles: 'git.commitFiles',
+  gitFileDiff: 'git.fileDiff',
   multicaOverview: 'multica.overview',
   multicaIssue: 'multica.issue',
   multicaFindByTapd: 'multica.findByTapd',
@@ -191,6 +199,8 @@ export const Events = {
   reportProgress: 'report:progress',
   reportOpen: 'report:open',
   knowledgeProgress: 'knowledge:progress',
+  vaultSearchOpen: 'vaultSearch:open',
+  multicaOpen: 'multica:open',
   assistantProgress: 'assistant:progress',
   projectCloneProgress: 'project:cloneProgress'
 } as const
@@ -226,6 +236,11 @@ export interface WorkbenchApi {
     stashDrop(projectId: string, index: number): Promise<Result<null>>
     /** 仓库 origin 对应的网页地址；没有远程时为 null */
     remoteWeb(projectId: string): Promise<Result<string | null>>
+    /** 查看提交历史，不切换工作区 */
+    history(projectId: string, query: HistoryQuery): Promise<Result<HistoryPage>>
+    historyRefs(projectId: string): Promise<Result<HistoryRefs>>
+    commitFiles(projectId: string, rev: string): Promise<Result<CommitFileChange[]>>
+    fileDiff(projectId: string, rev: string, file: string): Promise<Result<string>>
   }
   multica: {
     /** force 时清空元数据缓存 */
@@ -390,6 +405,9 @@ export interface WorkbenchApi {
     /** 点击汇报提醒 */
     reportOpen(cb: (kind: ReportKind) => void): Unsubscribe
     knowledgeProgress(cb: (text: string) => void): Unsubscribe
+    vaultSearchOpen(cb: () => void): Unsubscribe
+    /** 新窗口或主框架要打开 Multica 时，改到内嵌面板 */
+    multicaOpen(cb: (url: string) => void): Unsubscribe
     assistantProgress(cb: (text: string) => void): Unsubscribe
     projectCloneProgress(cb: (progress: CloneProgress) => void): Unsubscribe
   }

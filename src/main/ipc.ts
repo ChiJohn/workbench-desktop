@@ -21,6 +21,7 @@ import { mapLimit } from '../core/concurrency'
 import { desktopExe, multicaRuntimeEnv } from '../core/multica/multicaCli'
 import { dispatchDescription } from '../core/multica/multicaService'
 import { AppError, wrap } from '../core/result'
+import { multicaPanelUrl } from '../shared/multicaWeb'
 import { remoteWebUrl } from '../shared/repoUrl'
 import { findMiniprogramRoot } from '../core/launcher/launcherService'
 import { buildReleaseInfo } from '../core/release/releaseInfo'
@@ -52,7 +53,8 @@ import type {
   ProjectWriteRequest,
   TapdDetail,
   TapdKind,
-  TerminalDispatchRequest
+  TerminalDispatchRequest,
+  HistoryQuery
 } from '../shared/types'
 import type { HotkeyManager } from './hotkey'
 import type { ReportController } from './report'
@@ -538,6 +540,12 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     const remote = await git.origin(await repoPath(id))
     return remote ? remoteWebUrl(remote) : null
   })
+  handle(Channels.gitHistory, async (id: string, query: HistoryQuery) => git.history(await repoPath(id), query))
+  handle(Channels.gitHistoryRefs, async (id: string) => git.historyRefs(await repoPath(id)))
+  handle(Channels.gitCommitFiles, async (id: string, rev: string) => git.listCommitFiles(await repoPath(id), rev))
+  handle(Channels.gitFileDiff, async (id: string, rev: string, file: string) =>
+    git.showFileDiff(await repoPath(id), rev, file)
+  )
 
   const parseTapdKey = (key: string | null): { id: string; kind: TapdKind } | null => {
     const m = key ? /^(story|bug|task):(\d+)$/.exec(key) : null
@@ -688,7 +696,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
   handle(Channels.settingsSet, async (patch: PrefsPatch) => {
     const prev = prefs.get()
     const { tapdTokenEnc: _tapd, apifoxTokenEnc: _apifox, cnbTokenEnc: _cnb, ...safePatch } = patch
-    if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply(safePatch.hotkey)
+    if (safePatch.hotkey && safePatch.hotkey !== prev.hotkey) hotkey.apply('window', safePatch.hotkey)
+    if (safePatch.vaultSearchHotkey !== undefined && safePatch.vaultSearchHotkey !== (prev.vaultSearchHotkey ?? '')) {
+      hotkey.apply('vaultSearch', safePatch.vaultSearchHotkey)
+    }
     if (safePatch.autoLaunch !== undefined && safePatch.autoLaunch !== prev.autoLaunch) {
       try {
         app.setLoginItemSettings({ openAtLogin: Boolean(safePatch.autoLaunch), args: ['--hidden'] })
@@ -713,7 +724,14 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     if (!backup) throw new AppError('PREFS_BACKUP_MISSING', `Vault 中还没有偏好备份（${VAULT_PREFS_REL}）`)
     if (backup.hotkey && backup.hotkey !== prefs.get().hotkey) {
       try {
-        hotkey.apply(backup.hotkey)
+        hotkey.apply('window', backup.hotkey)
+      } catch {
+        // ignore hotkey conflict on restore
+      }
+    }
+    if (backup.vaultSearchHotkey !== undefined && backup.vaultSearchHotkey !== (prefs.get().vaultSearchHotkey ?? '')) {
+      try {
+        hotkey.apply('vaultSearch', backup.vaultSearchHotkey)
       } catch {
         // ignore hotkey conflict on restore
       }
@@ -740,6 +758,11 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
 
   handle(Channels.appOpenExternal, async (url: string) => {
     if (!/^https?:\/\//i.test(url)) throw new AppError('INVALID_URL', `只允许打开 http(s) 链接：${url}`)
+    const panel = multicaPanelUrl(url, prefs.get().multica?.webUrl)
+    if (panel) {
+      send(Events.multicaOpen, panel)
+      return null
+    }
     await shell.openExternal(url)
     return null
   })

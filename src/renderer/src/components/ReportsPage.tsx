@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { noteKey, REPORT_KIND_LABELS, REPORT_SOURCE_LABELS, shiftPeriod } from '../../../shared/reportPeriod'
 import type { Prefs, ReportEntry, ReportKind, ReportMaterial, ReportSourceResult, ReportWriter } from '../../../shared/types'
 import { api, unwrap } from '../api'
-import { qk, useReportMaterial, useSavePrefs } from '../queries'
+import { openAppLink } from '../openLink'
+import { qk, usePrefs, useReportMaterial, useSavePrefs } from '../queries'
 import { useReport } from '../stores/report'
 import { useUi } from '../stores/ui'
 import { toast } from '../stores/toast'
@@ -34,6 +35,7 @@ function Checkbox({ checked, partial, onChange }: { checked: boolean; partial?: 
 }
 
 function SourceBlock({ result }: { result: ReportSourceResult }) {
+  const webUrl = usePrefs().data?.multica?.webUrl
   const excluded = useReport((s) => s.excluded)
   const setExcluded = useReport((s) => s.setExcluded)
   const ids = result.entries.map((e) => e.id)
@@ -66,7 +68,7 @@ function SourceBlock({ result }: { result: ReportSourceResult }) {
                       href={e.url}
                       onClick={(ev) => {
                         ev.preventDefault()
-                        void unwrap(api.app.openExternal(e.url!)).catch((err) => toast.error(err, '打开失败'))
+                        void openAppLink(e.url!, webUrl).catch((err) => toast.error(err, '打开失败'))
                       }}
                     >
                       ↗

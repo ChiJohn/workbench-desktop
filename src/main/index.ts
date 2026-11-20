@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, Notification, shell } from 'electron'
 import { join } from 'node:path'
 import { Events } from '../shared/ipc'
+import { isEmbeddableMulticaUrl, multicaPanelUrl } from '../shared/multicaWeb'
 import { REPORT_KIND_LABELS } from '../shared/reportPeriod'
 import type { ReportKind, TapdItem } from '../shared/types'
 import { HotkeyManager } from './hotkey'
@@ -18,6 +19,7 @@ import { stopOcrService } from './paddleRecognize'
 
 let win: BrowserWindow | null = null
 let quitting = false
+let multicaWebUrl: () => string | undefined = () => undefined
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -46,10 +48,18 @@ function createWindow(): BrowserWindow {
     window.hide()
   })
   window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isEmbeddableMulticaUrl(url, multicaWebUrl())) {
+      window.webContents.send(Events.multicaOpen, url)
+      return { action: 'deny' }
+    }
     if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
-  window.webContents.on('will-navigate', (e) => e.preventDefault())
+  window.webContents.on('will-navigate', (e, url) => {
+    e.preventDefault()
+    const panel = multicaPanelUrl(url, multicaWebUrl())
+    if (panel) window.webContents.send(Events.multicaOpen, panel)
+  })
   if (!app.isPackaged) {
     window.webContents.on('before-input-event', (_e, input) => {
       if (input.type === 'keyDown' && input.key === 'F12') window.webContents.toggleDevTools()
@@ -109,10 +119,15 @@ function notifyReport(kind: ReportKind, send: (channel: string, payload?: unknow
 
 function bootstrap(): void {
   const services = createServices()
-  const hotkey = new HotkeyManager(toggleWindow)
+  const hotkey = new HotkeyManager()
   const send = (channel: string, payload?: unknown) => {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
+  hotkey.setHandler('window', toggleWindow)
+  hotkey.setHandler('vaultSearch', () => {
+    showWindow()
+    send(Events.vaultSearchOpen)
+  })
 
   const tray = createTray({
     showWindow,
@@ -158,16 +173,27 @@ function bootstrap(): void {
   void ensureWechatCli(services)
 
   Menu.setApplicationMenu(null)
+  multicaWebUrl = () => services.prefs.get().multica?.webUrl
   win = createWindow()
 
-  try {
-    hotkey.apply(services.prefs.get().hotkey)
-  } catch (e) {
+  const saved = services.prefs.get()
+  const hotkeyErrors: string[] = []
+  for (const [id, accelerator, label] of [
+    ['window', saved.hotkey, '唤起窗口'],
+    ['vaultSearch', saved.vaultSearchHotkey ?? 'CommandOrControl+Shift+K', 'Vault 搜索']
+  ] as const) {
+    try {
+      hotkey.apply(id, accelerator)
+    } catch (e) {
+      hotkeyErrors.push(`${label}：${(e as Error).message}`)
+    }
+  }
+  if (hotkeyErrors.length) {
     win.once('ready-to-show', () => {
       dialog.showMessageBox(win!, {
         type: 'warning',
         message: '全局快捷键注册失败',
-        detail: `${(e as Error).message}\n可以在「设置」中修改快捷键。`
+        detail: `${hotkeyErrors.join('\n')}\n可以在「设置」中修改快捷键。`
       })
     })
   }

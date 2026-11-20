@@ -34,6 +34,10 @@ interface UiState {
   taskKey: string | null
   /** 智能体页选中的 multica issue id */
   issueId: string | null
+  /** 内嵌 Multica 当前要打开的地址。空则用设置里的网页地址 */
+  multicaUrl: string | null
+  /** 同一地址再次跳转时也重新加载 */
+  multicaNav: number
   openWorkspace(id: WorkspaceId): void
   toggleWorkspace(id: WorkspaceId): void
   closeWorkspace(): void
@@ -53,6 +57,8 @@ interface UiState {
   setIssueId(id: string | null): void
   /** 打开智能体工作区并选中 issue，当前项目保持不动 */
   openIssue(id: string): void
+  /** 打开内嵌 Multica。传入地址时打开该页，否则保留当前页 */
+  openMultica(url?: string): void
   /** 任务完成后待沉淀的任务卡 */
   deposit: { task: string; title: string; project: string } | null
   offerDeposit(deposit: { task: string; title: string; project: string }): void
@@ -72,9 +78,12 @@ interface UiState {
   /** 模块折叠状态：key → 是否收起 */
   collapsedCards: Record<string, boolean>
   toggleCard(key: string, defaultOpen?: boolean): void
-  /** Ctrl+P 全局命令面板 */
+  /** 命令面板，默认 Ctrl+P */
   commandOpen: boolean
   setCommandOpen(open: boolean): void
+  /** 快捷键或命令面板打开的 vault 搜索 */
+  vaultSearchOpen: boolean
+  setVaultSearchOpen(open: boolean): void
 }
 
 const COLLAPSED_STORAGE_KEY = 'wb.collapsedCards'
@@ -115,6 +124,8 @@ export const useUi = create<UiState>((set) => ({
   logTab: null,
   taskKey: null,
   issueId: null,
+  multicaUrl: null,
+  multicaNav: 0,
   openWorkspace: (id) => set((state) => openWorkspace(navOf(state), id)),
   toggleWorkspace: (id) => set((state) => toggleWorkspace(navOf(state), id)),
   closeWorkspace: () => set((state) => closeWorkspace(navOf(state))),
@@ -151,6 +162,12 @@ export const useUi = create<UiState>((set) => ({
   setTaskKey: (taskKey) => set({ taskKey }),
   setIssueId: (issueId) => set({ issueId }),
   openIssue: (issueId) => set((state) => ({ ...openWorkspace(navOf(state), 'agents'), issueId })),
+  openMultica: (url) =>
+    set((state) => ({
+      ...openWorkspace(navOf(state), 'multica'),
+      ...(url ? { multicaUrl: url } : {}),
+      multicaNav: state.multicaNav + 1
+    })),
   deposit: null,
   offerDeposit: (deposit) => set({ deposit }),
   clearDeposit: () => set({ deposit: null }),
@@ -176,5 +193,7 @@ export const useUi = create<UiState>((set) => ({
       return { collapsedCards: next }
     }),
   commandOpen: false,
-  setCommandOpen: (commandOpen) => set({ commandOpen })
+  setCommandOpen: (commandOpen) => set({ commandOpen }),
+  vaultSearchOpen: false,
+  setVaultSearchOpen: (vaultSearchOpen) => set({ vaultSearchOpen })
 }))

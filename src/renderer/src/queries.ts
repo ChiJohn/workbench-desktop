@@ -243,6 +243,8 @@ export function useGitAction() {
     onSettled: async (_data, _err, a) => {
       await refreshStatus(qc, a.id)
       await qc.invalidateQueries({ queryKey: qk.branches(a.id) })
+      await qc.invalidateQueries({ queryKey: ['gitHistory', a.id] })
+      await qc.invalidateQueries({ queryKey: ['gitHistoryRefs', a.id] })
     }
   })
 }

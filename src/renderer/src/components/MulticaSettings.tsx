@@ -16,6 +16,7 @@ export function MulticaSettings({ prefs, projects }: { prefs: MulticaPrefs; proj
   const save = useSavePrefs()
   const [cliPath, setCliPath] = useState(prefs.cliPath ?? '')
   const [profile, setProfile] = useState(prefs.profile ?? '')
+  const [webUrl, setWebUrl] = useState(prefs.webUrl ?? '')
 
   const patch = (p: MulticaPrefs) => save.mutate({ multica: p }, { onSuccess: () => refreshMultica(qc, true) })
   const data = overview.data
@@ -50,6 +51,17 @@ export function MulticaSettings({ prefs, projects }: { prefs: MulticaPrefs; proj
           </select>
         </label>
       )}
+      <label>
+        <span>网页地址</span>
+        <input
+          className="mono"
+          placeholder="http://localhost:3000"
+          value={webUrl}
+          onChange={(e) => setWebUrl(e.target.value)}
+          onBlur={() => webUrl.trim() !== (prefs.webUrl ?? '') && patch({ webUrl: webUrl.trim() || undefined })}
+        />
+        <small>内嵌面板和「在 multica 打开」使用这个地址。默认本地 Docker；填 https://multica.ai/jinbi/issues 则走云端。问题链接会保留原来的路径。面板里也可以临时打开云端。</small>
+      </label>
       <label>
         <span>CLI 路径（可选）</span>
         <input

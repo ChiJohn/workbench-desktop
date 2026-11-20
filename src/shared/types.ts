@@ -88,6 +88,42 @@ export interface BranchList {
   local: string[]
 }
 
+export interface HistoryCommit {
+  hash: string
+  short: string
+  /** 作者时间 ISO */
+  time: string
+  author: string
+  subject: string
+}
+
+export interface HistoryPage {
+  commits: HistoryCommit[]
+  hasMore: boolean
+}
+
+export interface HistoryQuery {
+  /** 分支或远程引用，只用于查看 */
+  ref: string
+  author?: string
+  /** 有值时只看这个文件的历史，路径相对项目目录 */
+  path?: string
+  skip?: number
+  limit?: number
+}
+
+export interface CommitFileChange {
+  /** A 新增，M 修改，D 删除，R 重命名，C 复制 */
+  status: string
+  path: string
+  oldPath?: string
+}
+
+export interface HistoryRefs {
+  local: string[]
+  remote: string[]
+}
+
 export type PackageManager = 'pnpm' | 'yarn' | 'npm'
 
 export interface ScriptsInfo {
@@ -297,8 +333,12 @@ export interface QuickLink {
 
 export interface Prefs {
   vaultPath: string
-  /** Electron accelerator 格式 */
+  /** Electron accelerator 格式，唤起或隐藏窗口 */
   hotkey: string
+  /** 窗口内命令面板快捷键。空字符串表示关闭，默认 Ctrl+P */
+  commandHotkey?: string
+  /** Electron accelerator 格式。空字符串表示不注册 Vault 搜索快捷键 */
+  vaultSearchHotkey?: string
   terminal: 'wt' | 'powershell'
   /** 开机自动启动并隐藏到托盘 */
   autoLaunch?: boolean
@@ -501,6 +541,8 @@ export interface ReportGenerateRequest {
 export interface MulticaPrefs {
   cliPath?: string
   profile?: string
+  /** 内嵌页面地址。默认 http://localhost:3000，也可以填云端问题列表 */
+  webUrl?: string
   workspaceId?: string
   /** multica 项目 id → 仓库项目 id；空字符串表示删除 */
   projectMap?: Record<string, string>

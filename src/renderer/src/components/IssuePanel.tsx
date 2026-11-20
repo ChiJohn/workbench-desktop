@@ -2,8 +2,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { Project } from '../../../shared/types'
 import { api, unwrap } from '../api'
+import { openAppLink } from '../openLink'
 import { localTime } from '../format'
-import { qk, useMulticaIssue } from '../queries'
+import { qk, useMulticaIssue, usePrefs } from '../queries'
 import { toast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { ISSUE_STATUS_LABELS } from './AgentsPage'
@@ -19,6 +20,7 @@ export function IssuePanel({ issueId, projects, onClose }: Props) {
   const qc = useQueryClient()
   const detail = useMulticaIssue(issueId)
   const focusProject = useUi((s) => s.focusProject)
+  const prefs = usePrefs()
   const [busy, setBusy] = useState(false)
   const [descOpen, setDescOpen] = useState(false)
 
@@ -89,7 +91,7 @@ export function IssuePanel({ issueId, projects, onClose }: Props) {
       </dl>
 
       <div className="button-row wrap">
-        <button className="btn" onClick={() => api.app.openExternal(issue.url)}>
+        <button className="btn" onClick={() => void openAppLink(issue.url, prefs.data?.multica?.webUrl)}>
           在 multica 打开
         </button>
         <button className="btn" disabled={!repo} onClick={() => repo && focusProject(repo.id)}>

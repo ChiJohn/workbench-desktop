@@ -80,7 +80,8 @@ export function WorktreeCard({ projectId, changeCount }: Props) {
       qc.invalidateQueries({ queryKey: qk.gitChanges(projectId) }),
       qc.invalidateQueries({ queryKey: qk.gitStashes(projectId) }),
       qc.invalidateQueries({ queryKey: ['gitDiff', projectId] }),
-      refreshStatus(qc, projectId)
+      refreshStatus(qc, projectId),
+      qc.invalidateQueries({ queryKey: ['gitHistory', projectId] })
     ])
   }
 

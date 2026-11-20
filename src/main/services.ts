@@ -16,6 +16,7 @@ import { TapdService } from '../core/tapd/tapdService'
 import { TapdTokenStore } from './tapdToken'
 import { ApifoxTokenStore } from './apifoxToken'
 import { CnbTokenStore } from './cnbToken'
+import { DEFAULT_COMMAND_HOTKEY } from '../shared/accelerator'
 import type { Prefs } from '../shared/types'
 
 export interface Services {
@@ -37,6 +38,8 @@ function defaultPrefs(): Prefs {
   return {
     vaultPath: 'D:\\job\\code\\notes\\AI-Workbench',
     hotkey: 'CommandOrControl+Alt+W',
+    commandHotkey: DEFAULT_COMMAND_HOTKEY,
+    vaultSearchHotkey: 'CommandOrControl+Shift+K',
     terminal: 'wt',
     wechatDevtoolsCli: WECHAT_CLI_CANDIDATES.find((p) => existsSync(p)),
     codeRoot: existsSync('D:\\job\\code') ? 'D:\\job\\code' : undefined,

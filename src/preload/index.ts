@@ -32,7 +32,11 @@ const api: WorkbenchApi = {
     stashPush: (id, message) => invoke(Channels.gitStashPush, id, message),
     stashPop: (id, index) => invoke(Channels.gitStashPop, id, index),
     stashDrop: (id, index) => invoke(Channels.gitStashDrop, id, index),
-    remoteWeb: (id) => invoke(Channels.gitRemoteWeb, id)
+    remoteWeb: (id) => invoke(Channels.gitRemoteWeb, id),
+    history: (id, query) => invoke(Channels.gitHistory, id, query),
+    historyRefs: (id) => invoke(Channels.gitHistoryRefs, id),
+    commitFiles: (id, rev) => invoke(Channels.gitCommitFiles, id, rev),
+    fileDiff: (id, rev, file) => invoke(Channels.gitFileDiff, id, rev, file)
   },
   multica: {
     overview: (force) => invoke(Channels.multicaOverview, force),
@@ -176,6 +180,8 @@ const api: WorkbenchApi = {
     reportProgress: (cb) => subscribe(Events.reportProgress, cb),
     reportOpen: (cb) => subscribe(Events.reportOpen, cb),
     knowledgeProgress: (cb) => subscribe(Events.knowledgeProgress, cb),
+    vaultSearchOpen: (cb) => subscribe(Events.vaultSearchOpen, cb),
+    multicaOpen: (cb) => subscribe<string>(Events.multicaOpen, cb),
     assistantProgress: (cb) => subscribe(Events.assistantProgress, cb),
     projectCloneProgress: (cb) => subscribe(Events.projectCloneProgress, cb)
   }

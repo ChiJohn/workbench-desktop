@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { DEFAULT_COMMAND_HOTKEY, matchAccelerator } from '../../../shared/accelerator'
 import { DEFAULT_QUICK_LINKS } from '../../../shared/quickLinks'
 import type { Prefs, Project, TapdItem } from '../../../shared/types'
 import { api, unwrap } from '../api'
@@ -41,7 +42,8 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+      const chord = prefs?.commandHotkey ?? DEFAULT_COMMAND_HOTKEY
+      if (!e.repeat && matchAccelerator(chord, e)) {
         e.preventDefault()
         setOpen(!useUi.getState().commandOpen)
       } else if (e.key === 'Escape' && useUi.getState().commandOpen) {
@@ -51,7 +53,7 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [setOpen])
+  }, [prefs?.commandHotkey, setOpen])
 
   useEffect(() => {
     if (open) {
@@ -128,10 +130,17 @@ export function CommandPalette({ projects, prefs, tapdItems }: Props) {
       { id: 'nav:overview', title: '前往：总览', kw: 'overview 总览 首页', act: () => showOverview() },
       { id: 'nav:tasks', title: '前往：任务中心（TAPD）', kw: 'tasks tapd 任务 需求 缺陷', act: () => openWorkspace('tasks') },
       { id: 'nav:agents', title: '前往：智能体（Multica）', kw: 'agents multica 智能体 审核', act: () => openWorkspace('agents') },
+      { id: 'nav:multica', title: '前往：Multica', kw: 'multica 面板 网页 docker localhost 云端', act: () => openWorkspace('multica') },
       { id: 'nav:reports', title: '前往：汇报（日报 / 周报 / 月报）', kw: 'reports 汇报 日报 周报 月报', act: () => openWorkspace('reports') },
       { id: 'nav:knowledge', title: '前往：知识与收件箱', kw: 'knowledge 知识 问答 搜索 收件 图谱', act: () => openWorkspace('knowledge') },
       { id: 'nav:bookmarks', title: '前往：收藏书签', kw: 'bookmarks 收藏 书签 链接', act: () => openWorkspace('bookmarks') },
       { id: 'nav:settings', title: '前往：设置', kw: 'settings 设置 配置', act: () => openSettings() },
+      {
+        id: 'act:vault-search',
+        title: '动作：搜索 Vault',
+        kw: 'vault obsidian 知识 笔记 搜索',
+        act: () => useUi.getState().setVaultSearchOpen(true)
+      },
       {
         id: 'act:new-project',
         title: '动作：新增或克隆项目',

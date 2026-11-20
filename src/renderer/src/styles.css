@@ -433,6 +433,21 @@ h2 {
   background: var(--bg);
 }
 
+.project-pane,
+.workspace-pane {
+  contain: layout paint;
+}
+
+.main-stage.dragging {
+  cursor: col-resize;
+}
+
+.main-stage.dragging .project-pane,
+.main-stage.dragging .workspace-pane {
+  pointer-events: none;
+  user-select: none;
+}
+
 .main-stage.overlay .workspace-pane {
   position: absolute;
   inset: 0;
@@ -493,7 +508,8 @@ h2 {
 }
 
 .workspace-split:hover,
-.workspace-split.dragging {
+.workspace-split.dragging,
+.main-stage.dragging .workspace-split {
   background: var(--accent);
 }
 
@@ -504,6 +520,47 @@ h2 {
 
 .workspace-pane .page {
   padding-top: 16px;
+}
+
+.workspace-pane:has(.multica-web-page) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-pane:has(.multica-web-page) .workspace-bar {
+  flex: none;
+}
+
+.page.multica-web-page {
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.multica-web-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.multica-web-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multica-web-page iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
 }
 
 .page {
@@ -1116,6 +1173,50 @@ h2 {
   place-items: center;
   background: rgba(4, 6, 9, 0.6);
   backdrop-filter: blur(2px);
+}
+
+.vault-search {
+  width: min(640px, calc(100vw - 48px));
+  align-self: start;
+  margin-top: 12vh;
+}
+
+.vault-search input {
+  width: 100%;
+}
+
+.vault-search-list {
+  max-height: 360px;
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.vault-search-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vault-search-hit.active,
+.vault-search-hit:hover {
+  background: var(--bg-hover);
+}
+
+.vault-search-hit .hint {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal {
@@ -2294,14 +2395,133 @@ textarea.mono {
 }
 
 .diff-view {
-  max-height: 360px;
+  max-height: 420px;
   margin: 8px 0;
-  padding: 8px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-inset);
   font: 12px/1.45 var(--mono);
+}
+
+.diff-view.muted {
+  padding: 8px;
+}
+
+.diff-meta {
+  padding: 4px 8px;
+  color: var(--text-dim);
+  background: var(--bg-chrome);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.diff-side {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px;
+  border-right: 1px solid var(--border);
+}
+
+.diff-pair .diff-side:last-child {
+  border-right: 0;
+}
+
+.diff-no {
+  flex: none;
+  width: 3.2ch;
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.diff-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-empty {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.history-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.history-tools input {
+  width: 160px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.history-row,
+.history-file {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-row:hover,
+.history-file:hover,
+.history-row.selected {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+}
+
+.history-hash {
+  flex: none;
+  width: 7ch;
+}
+
+.history-subject {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-author {
+  flex: none;
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-time {
+  flex: none;
+}
+
+.history-files {
+  padding: 0 0 6px 18px;
+}
+
+.history-status {
+  flex: none;
+  width: 3.5em;
+  color: var(--yellow);
 }
 
 .ua-impact {

@@ -1,4 +1,4 @@
-export const TOOLBAR_IDS = ['overview', 'tasks', 'agents', 'reports', 'knowledge', 'bookmarks', 'gap', 'fetch', 'refresh', 'settings'] as const
+export const TOOLBAR_IDS = ['overview', 'tasks', 'agents', 'multica', 'reports', 'knowledge', 'bookmarks', 'gap', 'fetch', 'refresh', 'settings'] as const
 
 export type ToolbarId = (typeof TOOLBAR_IDS)[number]
 

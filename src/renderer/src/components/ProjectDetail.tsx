@@ -14,6 +14,7 @@ import { RepoAgentCard } from './RepoAgentCard'
 import { CnbCard } from './CnbCard'
 import { UaCard } from './UaCard'
 import { ScriptList } from './ScriptList'
+import { HistoryCard } from './HistoryCard'
 import { WorktreeCard } from './WorktreeCard'
 
 const OPENER_LABELS: Record<OpenerKind, string> = {
@@ -277,6 +278,8 @@ export function ProjectDetail({ project, status, prefs }: Props) {
               </label>
             )}
           </section>
+
+          <HistoryCard projectId={project.id} branch={r?.ok ? r.data.branch : null} />
 
           <WorktreeCard key={project.id} projectId={project.id} changeCount={r?.ok ? r.data.changes : undefined} />
 

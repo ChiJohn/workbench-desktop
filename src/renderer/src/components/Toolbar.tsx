@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { DEFAULT_COMMAND_HOTKEY, acceleratorLabel } from '../../../shared/accelerator'
 import type { Project } from '../../../shared/types'
 import { moveToolbarItem, normalizeToolbarOrder, type ToolbarId } from '../../../shared/toolbarOrder'
 import { toolbarActive, type WorkspaceId } from '../../../shared/workspaceNav'
-import { qk, useFetchAll } from '../queries'
+import { qk, useFetchAll, usePrefs } from '../queries'
 import { useUi } from '../stores/ui'
 
 const STORAGE_KEY = 'wb.toolbarOrder'
@@ -32,6 +33,9 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
   const showOverview = useUi((s) => s.showOverview)
   const toggleSettings = useUi((s) => s.toggleSettings)
   const fetchAll = useFetchAll(projects)
+  const prefs = usePrefs()
+  const commandChord = prefs.data?.commandHotkey
+  const commandHotkey = commandChord === '' ? '' : acceleratorLabel(commandChord || DEFAULT_COMMAND_HOTKEY)
   const [order, setOrder] = useState<ToolbarId[]>(loadOrder)
   const [dragging, setDragging] = useState<ToolbarId | null>(null)
   const skipClick = useRef(false)
@@ -107,6 +111,7 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
         </button>
       )
     }
+    if (id === 'multica') return <button key={id} {...drag} className={`${navClass('multica')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('multica'))}>Multica</button>
     if (id === 'reports') return <button key={id} {...drag} className={`${navClass('reports')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('reports'))}>汇报</button>
     if (id === 'knowledge') return <button key={id} {...drag} className={`${navClass('knowledge')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('knowledge'))}>知识</button>
     if (id === 'bookmarks') return <button key={id} {...drag} className={`${navClass('bookmarks')}${dragging === id ? ' dragging' : ''}`} onClick={click(() => toggleWorkspace('bookmarks'))}>收藏</button>
@@ -145,11 +150,11 @@ export function Toolbar({ projects, taskCount, reviewCount }: Props) {
         <button
           type="button"
           className="btn btn-ghost cmdk-trigger"
-          title="全局搜索与命令面板（Ctrl+P）"
+          title={commandHotkey ? `命令面板（${commandHotkey}）` : '命令面板'}
           onClick={() => useUi.getState().setCommandOpen(true)}
         >
           搜索
-          <span className="cmdk-kbd mono">Ctrl+P</span>
+          {commandHotkey && <span className="cmdk-kbd mono">{commandHotkey}</span>}
         </button>
       </nav>
     </header>

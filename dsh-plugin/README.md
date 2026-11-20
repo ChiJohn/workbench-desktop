@@ -26,6 +26,8 @@ DeepSeek Harness Workbench Extension: 深度整合 TAPD 敏捷协同、微信小
 pnpm run dsh web --patch D:/job/code/workbench-desktop/dsh-plugin/cordis.patch.yml
 ```
 
+挂载后，左侧全局面板增加「工作台」入口，打开项目、TAPD、小程序、接口和汇报的说明页。
+
 ### 2. 命令行 Headless 模式
 ```bash
 pnpm run dsh --profile headless --patch D:/job/code/workbench-desktop/dsh-plugin/cordis.patch.yml "列出我登记的所有项目并检查可用状态"

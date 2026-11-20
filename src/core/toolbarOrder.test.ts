@@ -7,6 +7,7 @@ describe('toolbar order', () => {
       'settings',
       'tasks',
       'agents',
+      'multica',
       'reports',
       'knowledge',
       'bookmarks',

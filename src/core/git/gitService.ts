@@ -1,6 +1,15 @@
 import { readFile, rm } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import type { BranchList, GitStashEntry, RepoStatus, WorktreeChange } from '../../shared/types'
+import type {
+  BranchList,
+  CommitFileChange,
+  GitStashEntry,
+  HistoryPage,
+  HistoryQuery,
+  HistoryRefs,
+  RepoStatus,
+  WorktreeChange
+} from '../../shared/types'
 import { execCommand } from '../exec'
 import { AppError } from '../result'
 import { parseBranchList, parseLastCommit, parseStatusV2 } from './parseStatus'
@@ -11,6 +20,7 @@ const NETWORK_TIMEOUT = 60_000
 /** 提交可能触发 husky / lint-staged */
 const COMMIT_TIMEOUT = 120_000
 const DIFF_MAX_BYTES = 400_000
+const HISTORY_PAGE = 40
 
 const GIT_ENV = {
   // 凭证缺失时直接失败，而不是卡住等待输入
@@ -84,6 +94,63 @@ function assertBranchName(name: string): void {
   if (!name.trim() || name.trim().startsWith('-')) {
     throw new AppError('INVALID_BRANCH', `非法的分支名：「${name}」`)
   }
+}
+
+function assertRev(ref: string): string {
+  const name = ref.trim()
+  if (!name || name.startsWith('-') || name.includes('..') || /[\s~^:?*[\]\\]/.test(name)) {
+    throw new AppError('INVALID_REF', `不能查看这个引用：「${ref}」`)
+  }
+  return name
+}
+
+function assertPath(path: string | undefined): string | undefined {
+  const name = path?.trim()
+  if (!name) return undefined
+  if (name.startsWith('-') || name.includes('\0') || name.split('/').includes('..')) {
+    throw new AppError('INVALID_PATH', `不能查看这个路径：「${path}」`)
+  }
+  return name
+}
+
+function escapeAuthor(author: string): string {
+  return author.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function stripPrefix(path: string, prefix: string): string {
+  const norm = path.replace(/\\/g, '/')
+  return prefix && norm.startsWith(prefix) ? norm.slice(prefix.length) : norm
+}
+
+export function parseHistory(out: string): HistoryPage['commits'] {
+  return out
+    .split('\x1e')
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [hash = '', short = '', time = '', author = '', ...subject] = record.split('\x1f')
+      return { hash, short, time, author, subject: subject.join('\x1f') }
+    })
+    .filter((commit) => commit.hash)
+}
+
+/** `git show -z --name-status`：普通文件是状态和路径，重命名再跟一个旧路径 */
+export function parseNameStatus(out: string): CommitFileChange[] {
+  const parts = out.split('\0').filter((part) => part.length > 0)
+  const files: CommitFileChange[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const status = parts[i]
+    if (!/^[AMDTURC]/.test(status)) continue
+    if (status.startsWith('R') || status.startsWith('C')) {
+      const oldPath = parts[++i]
+      const path = parts[++i]
+      if (path) files.push({ status: status[0], path, oldPath })
+    } else {
+      const path = parts[++i]
+      if (path) files.push({ status: status[0], path })
+    }
+  }
+  return files
 }
 
 export class GitService {
@@ -290,6 +357,82 @@ export class GitService {
 
   async toplevel(repoPath: string): Promise<string> {
     return (await this.run(repoPath, ['rev-parse', '--show-toplevel'], QUICK_TIMEOUT)).trim()
+  }
+
+  /** 查看某条引用的提交，不切换工作区。子目录下只包含碰到该目录的提交。 */
+  async history(repoPath: string, opts: HistoryQuery): Promise<HistoryPage> {
+    const ref = assertRev(opts.ref)
+    const limit = Math.min(HISTORY_PAGE, Math.max(1, Math.floor(opts.limit ?? HISTORY_PAGE)))
+    const skip = Math.max(0, Math.floor(opts.skip ?? 0))
+    const path = assertPath(opts.path)
+    const args = [
+      '-c',
+      'core.quotepath=off',
+      'log',
+      ref,
+      '-n',
+      String(limit + 1),
+      `--skip=${skip}`,
+      '--format=%x1e%H%x1f%h%x1f%aI%x1f%an%x1f%s'
+    ]
+    const author = opts.author?.trim()
+    if (author) args.push(`--author=${escapeAuthor(author)}`)
+    args.push('--', path ?? '.')
+    const out = await this.run(repoPath, args, QUICK_TIMEOUT).catch((e) => {
+      if (e instanceof AppError && e.code === 'GIT_FAILED' && /does not have any commits/.test(e.detail ?? '')) return ''
+      throw e
+    })
+    const commits = parseHistory(out)
+    return { commits: commits.slice(0, limit), hasMore: commits.length > limit }
+  }
+
+  async historyRefs(repoPath: string): Promise<HistoryRefs> {
+    const out = await this.run(
+      repoPath,
+      ['for-each-ref', '--format=%(refname)%00%(refname:short)', 'refs/heads', 'refs/remotes'],
+      QUICK_TIMEOUT
+    )
+    const local: string[] = []
+    const remote: string[] = []
+    for (const line of out.split(/\r?\n/)) {
+      if (!line) continue
+      const [full = '', short = ''] = line.split('\0')
+      if (!short || short === 'HEAD' || short.endsWith('/HEAD')) continue
+      if (full.startsWith('refs/heads/')) local.push(short)
+      else if (full.startsWith('refs/remotes/')) remote.push(short)
+    }
+    return { local, remote }
+  }
+
+  /** 某次提交碰到的文件。在子目录下执行时路径相对该目录。 */
+  async listCommitFiles(repoPath: string, rev: string): Promise<CommitFileChange[]> {
+    const hash = assertRev(rev)
+    const prefix = (await this.run(repoPath, ['rev-parse', '--show-prefix'], QUICK_TIMEOUT)).trim().replace(/\\/g, '/')
+    const out = await this.run(
+      repoPath,
+      ['-c', 'core.quotepath=off', 'show', '-z', '--first-parent', '--name-status', '--format=', hash, '--', '.'],
+      QUICK_TIMEOUT
+    )
+    return parseNameStatus(out)
+      .map((file) => ({
+        status: file.status,
+        path: stripPrefix(file.path, prefix),
+        oldPath: file.oldPath ? stripPrefix(file.oldPath, prefix) : undefined
+      }))
+      .filter((file) => file.path)
+  }
+
+  /** 某次提交里单个文件的 unified diff，供左右对照。 */
+  async showFileDiff(repoPath: string, rev: string, file: string): Promise<string> {
+    const hash = assertRev(rev)
+    const path = assertPath(file)
+    if (!path) throw new AppError('INVALID_PATH', '没有要查看的文件')
+    const out = await this.run(
+      repoPath,
+      ['-c', 'core.quotepath=off', 'show', '--format=', '--unified=3', hash, '--', path],
+      QUICK_TIMEOUT
+    )
+    return out.length > DIFF_MAX_BYTES ? `${out.slice(0, DIFF_MAX_BYTES)}\n…（diff 过长，已截断）` : out
   }
 
   /**

@@ -1,10 +1,11 @@
-export const WORKSPACE_IDS = ['tasks', 'agents', 'reports', 'knowledge', 'bookmarks'] as const
+export const WORKSPACE_IDS = ['tasks', 'agents', 'multica', 'reports', 'knowledge', 'bookmarks'] as const
 
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 export const WORKSPACE_LABELS: Record<WorkspaceId, string> = {
   tasks: '任务',
   agents: '智能体',
+  multica: 'Multica',
   reports: '汇报',
   knowledge: '知识',
   bookmarks: '收藏'

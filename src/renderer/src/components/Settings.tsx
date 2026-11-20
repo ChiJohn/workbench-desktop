@@ -280,6 +280,8 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
         vaultPath: form.vaultPath.trim(),
         codeRoot: form.codeRoot?.trim() ?? '',
         hotkey: form.hotkey.trim(),
+        commandHotkey: form.commandHotkey?.trim() ?? '',
+        vaultSearchHotkey: form.vaultSearchHotkey?.trim() ?? '',
         terminal: form.terminal,
         autoLaunch: Boolean(form.autoLaunch),
         wechatDevtoolsCli: form.wechatDevtoolsCli?.trim() || undefined,
@@ -342,9 +344,29 @@ export function Settings({ prefs, registry, registryError, tapdStatus, apifoxSta
           <small>克隆远程仓库时，默认放在这个目录下。本机有 D:\job\code 时会自动用它</small>
         </label>
         <label>
-          <span>全局快捷键</span>
+          <span>唤起窗口</span>
           <input className="mono" value={form.hotkey} onChange={(e) => set('hotkey', e.target.value)} />
-          <small>Electron 快捷键格式，例如 CommandOrControl+Alt+W</small>
+          <small>全局快捷键，再次按下隐藏到托盘。例如 CommandOrControl+Alt+W</small>
+        </label>
+        <label>
+          <span>命令面板</span>
+          <input
+            className="mono"
+            value={form.commandHotkey ?? 'CommandOrControl+P'}
+            placeholder="CommandOrControl+P"
+            onChange={(e) => set('commandHotkey', e.target.value)}
+          />
+          <small>窗口内快捷键，打开项目、任务和动作的搜索面板。默认 Ctrl+P，只在工作台聚焦时生效，留空则关闭</small>
+        </label>
+        <label>
+          <span>Vault 搜索</span>
+          <input
+            className="mono"
+            value={form.vaultSearchHotkey ?? ''}
+            placeholder="CommandOrControl+Shift+K"
+            onChange={(e) => set('vaultSearchHotkey', e.target.value)}
+          />
+          <small>全局快捷键，按下后唤起窗口并打开 vault 快速搜索。留空则关闭</small>
         </label>
         <label>
           <span>终端</span>

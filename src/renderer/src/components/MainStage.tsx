@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import type { StatusMap } from '../../../shared/ipc'
 import type { CnbSummaryItem, MulticaOverview, Prefs, Project, RegistryResult, TapdBoard, TapdStatus } from '../../../shared/types'
 import {
+  COMPACT_PANE,
   DEFAULT_WORKSPACE_SPLIT,
   WORKSPACE_LABELS,
   WORKSPACE_SPLIT_KEY,
   clampWorkspaceSplit,
   loadWorkspaceSplit,
-  workspaceCompact,
   workspaceOverlay,
   type WorkspaceId
 } from '../../../shared/workspaceNav'
@@ -17,11 +17,24 @@ import { AgentsPage } from './AgentsPage'
 import { BookmarksPage } from './BookmarksPage'
 import { EmptyState } from './EmptyState'
 import { KnowledgePage } from './KnowledgePage'
+import { MulticaWebPage } from './MulticaWebPage'
 import { Overview } from './Overview'
 import { ProjectDetail } from './ProjectDetail'
 import { ReportsPage } from './ReportsPage'
 import { Settings } from './Settings'
 import { TasksPage } from './TasksPage'
+
+const ProjectPane = memo(ProjectDetail)
+const TasksPane = memo(TasksPage)
+const AgentsPane = memo(AgentsPage)
+const ReportsPane = memo(ReportsPage)
+const KnowledgePane = memo(KnowledgePage)
+const BookmarksPane = memo(BookmarksPage)
+const OverviewPane = memo(Overview)
+
+function splitColumns(value: number): string {
+  return `minmax(300px, ${value}fr) 6px minmax(280px, ${1 - value}fr)`
+}
 
 interface Props {
   projects: Project[]
@@ -63,8 +76,8 @@ export function MainStage({
   const mainRef = useRef<HTMLElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const paneRef = useRef<HTMLDivElement>(null)
-  const [mainWidth, setMainWidth] = useState(1200)
-  const [paneWidth, setPaneWidth] = useState(800)
+  const [mainNarrow, setMainNarrow] = useState(false)
+  const [paneNarrow, setPaneNarrow] = useState(false)
   const [split, setSplit] = useState(() => {
     try {
       return loadWorkspaceSplit(localStorage.getItem(WORKSPACE_SPLIT_KEY))
@@ -73,11 +86,15 @@ export function MainStage({
     }
   })
   const [dragging, setDragging] = useState(false)
+  const splitRef = useRef(split)
 
   useEffect(() => {
     const el = mainRef.current
     if (!el) return
-    const measure = () => setMainWidth(el.clientWidth)
+    const measure = () => {
+      const next = workspaceOverlay(el.clientWidth)
+      setMainNarrow((prev) => (prev === next ? prev : next))
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(el)
@@ -111,17 +128,20 @@ export function MainStage({
   useEffect(() => {
     const el = paneRef.current
     if (!el || !workspace) return
-    const measure = () => setPaneWidth(el.clientWidth)
+    const measure = () => {
+      const next = el.clientWidth < COMPACT_PANE
+      setPaneNarrow((prev) => (prev === next ? prev : next))
+    }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [workspace, mainWidth, projectId])
+  }, [workspace, projectId])
 
   const project = projectId ? projects.find((item) => item.id === projectId) : undefined
-  const overlay = Boolean(workspace && projectId && workspaceOverlay(mainWidth))
+  const overlay = Boolean(workspace && projectId && mainNarrow)
   const splitLayout = Boolean(workspace && projectId && !overlay)
-  const compact = workspace ? workspaceCompact(paneWidth, overlay) : false
+  const compact = Boolean(workspace && (overlay || paneNarrow))
   const repoStatus = project ? status?.[project.id] : undefined
   const branch = repoStatus?.ok ? repoStatus.data.branch : undefined
 
@@ -130,28 +150,37 @@ export function MainStage({
     if (!stage) return
     event.preventDefault()
     setDragging(true)
+    let frame = 0
     const move = (ev: PointerEvent) => {
       const rect = stage.getBoundingClientRect()
-      const next = clampWorkspaceSplit(rect.width > 0 ? (ev.clientX - rect.left) / rect.width : split)
-      setSplit(next)
+      const next = clampWorkspaceSplit(rect.width > 0 ? (ev.clientX - rect.left) / rect.width : splitRef.current)
+      if (next === splitRef.current) return
+      splitRef.current = next
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        setSplit(splitRef.current)
+      })
+    }
+    const up = () => {
+      if (frame) cancelAnimationFrame(frame)
+      setDragging(false)
+      setSplit(splitRef.current)
       try {
-        localStorage.setItem(WORKSPACE_SPLIT_KEY, String(next))
+        localStorage.setItem(WORKSPACE_SPLIT_KEY, String(splitRef.current))
       } catch {
         // ignore
       }
-    }
-    const up = () => {
-      setDragging(false)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
-  const stageStyle: CSSProperties | undefined = splitLayout
-    ? { gridTemplateColumns: `minmax(300px, ${split}fr) 6px minmax(280px, ${1 - split}fr)` }
-    : undefined
+  const stageStyle: CSSProperties | undefined = splitLayout ? { gridTemplateColumns: splitColumns(split) } : undefined
 
   return (
     <main className="main" ref={mainRef}>
@@ -170,14 +199,14 @@ export function MainStage({
       )}
       <div
         ref={stageRef}
-        className={`main-stage${overlay ? ' overlay' : ''}`}
+        className={`main-stage${overlay ? ' overlay' : ''}${dragging ? ' dragging' : ''}`}
         style={stageStyle}
         inert={settingsOpen || undefined}
       >
         {projectId && (
           <div className="project-pane" inert={overlay || undefined}>
             {project ? (
-              <ProjectDetail project={project} status={status} prefs={prefs} />
+              <ProjectPane project={project} status={status} prefs={prefs} />
             ) : (
               <div className="page hint">读取项目…</div>
             )}
@@ -185,7 +214,7 @@ export function MainStage({
         )}
         {splitLayout && (
           <div
-            className={`workspace-split${dragging ? ' dragging' : ''}`}
+            className="workspace-split"
             role="separator"
             aria-orientation="vertical"
             aria-label="调整项目与工作区宽度"
@@ -194,19 +223,21 @@ export function MainStage({
         )}
         {workspace && (
           <div className="workspace-pane" ref={paneRef}>
-            <div className="workspace-bar">
-              {overlay && project && (
-                <button type="button" className="workspace-project" onClick={closeWorkspace}>
-                  {project.name}
-                  {branch ? <span className="muted"> · {branch}</span> : null}
+            {workspace !== 'multica' && (
+              <div className="workspace-bar">
+                {overlay && project && (
+                  <button type="button" className="workspace-project" onClick={closeWorkspace}>
+                    {project.name}
+                    {branch ? <span className="muted"> · {branch}</span> : null}
+                  </button>
+                )}
+                <span className="workspace-title">{WORKSPACE_LABELS[workspace]}</span>
+                <span className="spacer" />
+                <button type="button" className="btn btn-small btn-ghost" onClick={closeWorkspace}>
+                  关闭
                 </button>
-              )}
-              <span className="workspace-title">{WORKSPACE_LABELS[workspace]}</span>
-              <span className="spacer" />
-              <button type="button" className="btn btn-small btn-ghost" onClick={closeWorkspace}>
-                关闭
-              </button>
-            </div>
+              </div>
+            )}
             <WorkspacePage
               id={workspace}
               compact={compact}
@@ -231,7 +262,7 @@ export function MainStage({
                 onAction={() => useUi.getState().openProjectEditor({ mode: 'add' })}
               />
             ) : (
-              <Overview projects={projects} status={status} builds={builds} loading={statusLoading} />
+              <OverviewPane projects={projects} status={status} builds={builds} loading={statusLoading} />
             )}
           </div>
         )}
@@ -257,9 +288,10 @@ function WorkspacePage({
   board: UseQueryResult<TapdBoard>
   multica: UseQueryResult<MulticaOverview>
 }) {
-  if (id === 'tasks') return <TasksPage status={tapdStatus} board={board} projects={projects} prefs={prefs} compact={compact} />
-  if (id === 'agents') return <AgentsPage overview={multica} projects={projects} compact={compact} />
-  if (id === 'reports') return <ReportsPage prefs={prefs} />
-  if (id === 'knowledge') return <KnowledgePage projects={projects} />
-  return <BookmarksPage links={prefs?.quickLinks} />
+  if (id === 'tasks') return <TasksPane status={tapdStatus} board={board} projects={projects} prefs={prefs} compact={compact} />
+  if (id === 'agents') return <AgentsPane overview={multica} projects={projects} compact={compact} />
+  if (id === 'multica') return <MulticaWebPage />
+  if (id === 'reports') return <ReportsPane prefs={prefs} />
+  if (id === 'knowledge') return <KnowledgePane projects={projects} />
+  return <BookmarksPane links={prefs?.quickLinks} />
 }

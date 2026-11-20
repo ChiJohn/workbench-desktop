@@ -101,6 +101,7 @@ export function useGlobalEvents(): void {
       }),
       api.on.reportProgress((text) => useReport.getState().setProgress(text)),
       api.on.knowledgeProgress((text) => useKnowledge.getState().setProgress(text)),
+      api.on.multicaOpen((url) => useUi.getState().openMultica(url)),
       api.on.reportOpen((kind) => {
         useReport.getState().open(kind)
         useUi.getState().openWorkspace('reports')

@@ -9,6 +9,7 @@ import { Toolbar } from './components/Toolbar'
 import { useApifoxStatus, useCnbStatus, useCnbSummary, useMulticaOverview, usePrefs, useRegistry, useStatusAll, useTapdBoard, useTapdStatus } from './queries'
 import { DepositDialog } from './components/DepositDialog'
 import { CommandPalette } from './components/CommandPalette'
+import { VaultSearchDialog } from './components/VaultSearchDialog'
 import { useUi } from './stores/ui'
 import { useGlobalEvents } from './useGlobalEvents'
 
@@ -52,6 +53,7 @@ export function App() {
       <DepositDialog projects={projects} />
       <ProjectDialog projects={projects} codeRoot={prefs.data?.codeRoot} />
       <CommandPalette projects={projects} prefs={prefs.data} tapdItems={board.data?.items} />
+      <VaultSearchDialog />
       <StickyNote prefs={prefs.data} />
       <AssistantDock />
       <Toasts />
