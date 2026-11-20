@@ -5,6 +5,10 @@ export default defineConfig({
   main: {},
   preload: {},
   renderer: {
-    plugins: [react()]
+    plugins: [react()],
+    server: {
+      port: 5174,
+      strictPort: true
+    }
   }
 })
