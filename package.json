@@ -12,7 +12,15 @@
     "test:watch": "vitest",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "pnpm typecheck:node && pnpm typecheck:web"
+    "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
+    "build:win": "electron-vite build && electron-builder --win --x64"
+  },
+  "build": {
+    "npmRebuild": false,
+    "electronDist": "node_modules/electron/dist",
+    "asarUnpack": [
+      "**/node_modules/node-pty/**/*"
+    ]
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.5",
@@ -30,12 +38,18 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["node-pty"]
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "node-pty"
+    ]
   }
 }
