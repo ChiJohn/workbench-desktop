@@ -46,7 +46,8 @@ const api: WorkbenchApi = {
     comment: (id, text) => invoke(Channels.multicaComment, id, text),
     complete: (id, commit) => invoke(Channels.multicaComplete, id, commit),
     backfill: (id) => invoke(Channels.multicaBackfill, id),
-    launchDesktop: () => invoke(Channels.multicaLaunchDesktop)
+    launchDesktop: () => invoke(Channels.multicaLaunchDesktop),
+    syncProjects: () => invoke(Channels.multicaSyncProjects)
   },
   runner: {
     scripts: (id) => invoke(Channels.runnerScripts, id),

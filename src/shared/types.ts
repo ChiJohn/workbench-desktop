@@ -638,6 +638,16 @@ export interface MulticaDispatchRequest {
   align?: { skipDesigns?: string[]; skipApis?: string[] }
 }
 
+export interface MulticaProjectSyncResult {
+  created: { title: string }[]
+  updated: { title: string }[]
+  /** 已经对应，且描述里已有仓库路径 */
+  unchanged: number
+  /** 本机目录不存在，跳过 */
+  unavailable: number
+  failed: { title: string; message: string }[]
+}
+
 export interface MulticaDispatchResult {
   issue: MulticaIssue
   /** metadata 写入失败等非致命问题 */

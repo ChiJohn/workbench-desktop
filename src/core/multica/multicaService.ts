@@ -7,6 +7,7 @@ import type {
   MulticaIssueDetail,
   MulticaOverview,
   MulticaPrefs,
+  MulticaProjectSyncResult,
   MulticaProject,
   MulticaRuntime,
   MulticaWorkspace,
@@ -16,6 +17,7 @@ import { formatDate } from '../../shared/reportPeriod'
 import { mapLimit } from '../concurrency'
 import { AppError } from '../result'
 import { matchProjects, type RawProject, type RepoRef } from './projectMatch'
+import { planProjectSync } from './projectSync'
 
 export const MULTICA_WEB = 'https://multica.ai'
 export const OPEN_STATUSES = ['in_progress', 'in_review', 'blocked', 'todo', 'backlog'] as const
@@ -166,6 +168,29 @@ export class MulticaService {
 
   async project(projectId: string): Promise<MulticaProject | null> {
     return this.context(await this.loadMeta()).projects.get(projectId) ?? null
+  }
+
+  /** 把工作台仓库同步到当前工作区：缺项目则新建，描述里缺仓库路径则补上。 */
+  async syncProjects(): Promise<MulticaProjectSyncResult> {
+    const meta = await this.loadMeta()
+    const plan = planProjectSync(meta.rawProjects, this.deps.repos(), this.deps.prefs().projectMap ?? {})
+    const created: { title: string }[] = []
+    const updated: { title: string }[] = []
+    const failed: { title: string; message: string }[] = []
+    const workspaceId = meta.workspace.id
+    for (const item of [...plan.create, ...plan.update]) {
+      const args = item.projectId
+        ? ['project', 'update', item.projectId, '--description', item.description]
+        : ['project', 'create', '--title', item.title, '--description', item.description]
+      try {
+        await this.cli.json(args, { workspaceId })
+        ;(item.projectId ? updated : created).push({ title: item.title })
+      } catch (e) {
+        failed.push({ title: item.title, message: e instanceof Error ? e.message : String(e) })
+      }
+    }
+    this.reset()
+    return { created, updated, unchanged: plan.unchanged, unavailable: plan.unavailable, failed }
   }
 
   async findByTapd(tapdKey: string): Promise<MulticaIssue | null> {

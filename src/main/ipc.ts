@@ -631,6 +631,10 @@ export function registerIpc({ services, hotkey, poller, report, knowledge, proje
     if (!project) throw new AppError('MULTICA_NO_REPO', '任务没有对应仓库，请先在设置中映射 multica 项目')
     return backfill(detail, project)
   })
+  handle(Channels.multicaSyncProjects, async () => {
+    await registry.current().catch(() => null)
+    return multica.syncProjects()
+  })
   handle(Channels.multicaLaunchDesktop, async () => {
     const exe = desktopExe(process.env)
     if (!existsSync(exe)) throw new AppError('MULTICA_DESKTOP_MISSING', '没有找到 multica 桌面端', exe)

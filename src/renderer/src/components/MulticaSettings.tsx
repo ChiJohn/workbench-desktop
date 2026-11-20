@@ -1,7 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { MulticaPrefs, MulticaProject, Project } from '../../../shared/types'
+import { api, unwrap } from '../api'
 import { refreshMultica, useMulticaOverview, useSavePrefs } from '../queries'
+import { toast } from '../stores/toast'
 import { RepoSelect } from './TasksPage'
 
 const MATCH_LABELS: Record<NonNullable<MulticaProject['matchedBy']>, string> = {
@@ -17,9 +19,28 @@ export function MulticaSettings({ prefs, projects }: { prefs: MulticaPrefs; proj
   const [cliPath, setCliPath] = useState(prefs.cliPath ?? '')
   const [profile, setProfile] = useState(prefs.profile ?? '')
   const [webUrl, setWebUrl] = useState(prefs.webUrl ?? '')
+  const [syncing, setSyncing] = useState(false)
 
   const patch = (p: MulticaPrefs) => save.mutate({ multica: p }, { onSuccess: () => refreshMultica(qc, true) })
   const data = overview.data
+  const syncProjects = async () => {
+    setSyncing(true)
+    try {
+      const result = await unwrap(api.multica.syncProjects())
+      await refreshMultica(qc, true)
+      const unavailable = result.unavailable > 0 ? `，跳过 ${result.unavailable} 个未在本机的仓库` : ''
+      toast.success(`新建 ${result.created.length} 个，补上路径 ${result.updated.length} 个，已对应 ${result.unchanged} 个${unavailable}`)
+      if (result.failed.length > 0) {
+        toast.failure(
+          `${result.failed.length} 个没有同步`,
+          result.failed.map((item) => `${item.title}：${item.message}`).join('\n')
+        )
+      }
+    } catch (e) {
+      toast.error(e, '同步项目失败')
+    }
+    setSyncing(false)
+  }
 
   return (
     <section className="card form">
@@ -83,6 +104,15 @@ export function MulticaSettings({ prefs, projects }: { prefs: MulticaPrefs; proj
         />
         <small>复用桌面端的登录信息，令牌不经过工作台</small>
       </label>
+
+      <div className="button-row">
+        <button className="btn" type="button" disabled={syncing || overview.isPending} onClick={() => void syncProjects()}>
+          {syncing ? '正在同步…' : '同步项目'}
+        </button>
+      </div>
+      <small className="hint">
+        把工作台里可用的仓库同步到当前 CLI 连接的工作区：没有对应项目就按 vault 目录名新建，描述里写上仓库路径。本地 Docker 要把上面的 profile 设为 local。
+      </small>
 
       {data && data.projects.length > 0 && (
         <>

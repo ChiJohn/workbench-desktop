@@ -286,3 +286,25 @@ describe('MulticaService.doneBetween', () => {
   })
 })
 
+describe('MulticaService.syncProjects', () => {
+  it('creates the missing project and does not rewrite one that already has the path', async () => {
+    const repos = [
+      ...REPOS,
+      { id: 'd:\\job\\code\\lvcc', repoPath: 'D:\\job\\code\\lvcc', obsidianLink: 'Projects/驴充充小程序/主页', available: true }
+    ]
+    const f = fakeCli({
+      ...baseRoutes(),
+      'project create': () => ({ id: 'p3', title: '驴充充小程序' })
+    })
+    const s = new MulticaService(f.cli, { repos: () => repos, prefs: () => ({}) })
+    const result = await s.syncProjects()
+    expect(result.created).toEqual([{ title: '驴充充小程序' }])
+    expect(result.updated).toEqual([])
+    expect(result.unchanged).toBe(1)
+    expect(result.failed).toEqual([])
+    const create = f.calls.find((c) => c.args[1] === 'create')
+    expect(create?.workspaceId).toBe('w1')
+    expect(create?.args).toEqual(['project', 'create', '--title', '驴充充小程序', '--description', '代码仓库目录：D:\\job\\code\\lvcc'])
+  })
+})
+

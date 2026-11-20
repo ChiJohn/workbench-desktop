@@ -4,6 +4,9 @@ export interface RepoRef {
   id: string
   repoPath: string
   obsidianLink: string
+  name?: string
+  /** false 表示本机目录不存在，同步时跳过。缺省视为可用。 */
+  available?: boolean
 }
 
 export interface RawProject {
@@ -28,9 +31,14 @@ function containsPath(text: string, path: string): boolean {
   }
 }
 
-const folderName = (obsidianLink: string) => {
+/** `Projects/驴充充后台/主页` → `驴充充后台` */
+export function vaultFolderName(obsidianLink: string): string {
   const parts = obsidianLink.split('/').filter(Boolean)
   return parts.length > 1 ? parts[parts.length - 2] : (parts[0] ?? '')
+}
+
+export function hasRepoPath(text: string, repoPath: string): boolean {
+  return containsPath(normalize(text), normalize(repoPath).replace(/\/+$/, ''))
 }
 
 /** 手工映射 > 描述中包含仓库路径（取最长）> 标题等于 vault 项目目录名 */
@@ -50,7 +58,7 @@ export function matchProjects(projects: RawProject[], repos: RepoRef[], manual: 
       result.set(p.id, { repoId: byPath.id, matchedBy: 'path' })
       continue
     }
-    const byName = repos.find((r) => folderName(r.obsidianLink) === p.title.trim())
+    const byName = repos.find((r) => vaultFolderName(r.obsidianLink) === p.title.trim())
     result.set(p.id, byName ? { repoId: byName.id, matchedBy: 'name' } : { repoId: null, matchedBy: null })
   }
   return result

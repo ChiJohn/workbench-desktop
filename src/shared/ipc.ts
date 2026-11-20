@@ -7,6 +7,7 @@ import type {
   MulticaIssue,
   MulticaIssueDetail,
   MulticaOverview,
+  MulticaProjectSyncResult,
   OpenerKind,
   Prefs,
   PrefsPatch,
@@ -151,6 +152,7 @@ export const Channels = {
   multicaComplete: 'multica.complete',
   multicaBackfill: 'multica.backfill',
   multicaLaunchDesktop: 'multica.launchDesktop',
+  multicaSyncProjects: 'multica.syncProjects',
   reportCollect: 'report.collect',
   reportGenerate: 'report.generate',
   reportCancel: 'report.cancel',
@@ -253,6 +255,8 @@ export interface WorkbenchApi {
     /** 返回任务卡的 vault 相对路径 */
     backfill(id: string): Promise<Result<string>>
     launchDesktop(): Promise<Result<null>>
+    /** 把工作台仓库同步到当前 multica 工作区 */
+    syncProjects(): Promise<Result<MulticaProjectSyncResult>>
   }
   runner: {
     scripts(projectId: string): Promise<Result<ScriptsInfo>>
